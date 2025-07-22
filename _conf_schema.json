@@ -4,168 +4,115 @@
     "type": "bool",
     "default": true
   },
+"max_fortune": {
+    "description": "人品值上限",
+    "type": "int",
+    "default": 100
+  },
+  "min_fortune": {
+    "description": "人品值下限",
+    "type": "int",
+    "default": 0
+  },
+
   "fortune_algorithm": {
     "description": "人品值生成算法",
     "type": "string",
-    "default": "uniform",
-    "options": ["uniform", "normal", "lucky", "unlucky", "polarized", "ladder", "golden", "sin_wave", "weighted", "custom"],
-    "hint": "选择不同的算法会产生不同的人品值分布"
+    "default": "random",
+    "options": ["random", "weighted"],
+    "hint": "random:纯随机; weighted:正态分布加权"
   },
-  "fortune_normal_mean": {
-    "description": "正态分布均值",
-    "type": "int",
-    "default": 60,
-    "hint": "仅在算法为normal时生效，控制人品值的中心点"
-  },
-  "fortune_normal_std": {
-    "description": "正态分布标准差",
-    "type": "int",
-    "default": 20,
-    "hint": "仅在算法为normal时生效，控制人品值的离散程度"
-  },
-  "fortune_weight_0_20": {
-    "description": "权重：0-20分区间",
-    "type": "int",
-    "default": 10,
-    "hint": "算法为weighted时生效"
-  },
-  "fortune_weight_21_40": {
-    "description": "权重：21-40分区间",
-    "type": "int",
-    "default": 20,
-    "hint": "算法为weighted时生效"
-  },
-  "fortune_weight_41_60": {
-    "description": "权重：41-60分区间",
-    "type": "int",
-    "default": 40,
-    "hint": "算法为weighted时生效"
-  },
-  "fortune_weight_61_80": {
-    "description": "权重：61-80分区间",
-    "type": "int",
-    "default": 20,
-    "hint": "算法为weighted时生效"
-  },
-  "fortune_weight_81_100": {
-    "description": "权重：81-100分区间",
-    "type": "int",
-    "default": 10,
-    "hint": "算法为weighted时生效"
-  },
-  "fortune_custom_expression": {
-    "description": "自定义算法表达式",
-    "type": "string",
-    "default": "random.randint(0, 100)",
-    "hint": "仅在算法为custom时生效，支持random/math/date/datetime模块"
-  },
-  "detecting_message": {
-    "description": "检测中提示消息",
-    "type": "string",
-    "default": "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...",
-    "hint": "支持变量：{nickname}, {card}, {title}"
-  },
-  "process_prompt": {
-    "description": "过程模拟提示词",
-    "type": "text",
-    "default": "使用user_id简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
-  },
-  "process_template": {
-    "description": "过程模拟模板（优先级高于prompt）",
-    "type": "text",
-    "default": ""
-  },
-  "advice_prompt": {
-    "description": "评语提示词",
-    "type": "text",
-    "default": "使用user_id简称称呼，对user_id的今日人品值给出你的评语和建议，50字以内"
-  },
-  "advice_template": {
-    "description": "评语模板（优先级高于prompt）",
-    "type": "text",
-    "default": ""
-  },
-  "result_cache_days": {
+  "cache_days": {
     "description": "结果缓存天数",
     "type": "int",
-    "default": 7
-  },
-  "show_cached_result": {
-    "description": "查询时是否显示缓存的结果文本",
-    "type": "bool",
-    "default": true
-  },
-  "random_template": {
-    "description": "随机结果模板",
-    "type": "text",
-    "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}"
-  },
-  "query_template": {
-    "description": "查询结果模板",
-    "type": "text",
-    "default": "📌 今日人品\n[{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}"
-  },
-  "rank_template": {
-    "description": "排行榜模板",
-    "type": "text",
-    "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}"
-  },
-  "rank_item_template": {
-    "description": "排行榜项目模板",
-    "type": "string",
-    "default": "{medal} {nickname}: {jrrp} ({fortune})",
-    "hint": "支持变量: {medal}, {title}, {card}, {nickname}, {jrrp}, {fortune}, {femoji}, {rank}"
-  },
-  "rank_display_count": {
-    "description": "排行榜显示数量",
-    "type": "int",
-    "default": 10,
-    "hint": "-1表示显示所有"
-  },
-  "history_template": {
-    "description": "历史记录模板",
-    "type": "text",
-    "default": "📚 {nickname} 的人品历史记录\n{items}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}"
+    "default": 7,
+    "hint": "缓存多少天的占卜结果"
   },
   "history_days": {
     "description": "历史记录天数",
     "type": "int",
-    "default": 30
+    "default": 30,
+    "hint": "保留多少天的历史记录"
   },
-  "use_llm": {
-    "description": "是否使用LLM生成占卜内容",
+  "show_cached_result": {
+    "description": "查询时显示缓存结果",
     "type": "bool",
     "default": true,
-    "hint": "关闭后使用固定文本"
+    "hint": "第二次查询时是否显示之前的占卜过程"
+  },
+  "detecting_message": {
+    "description": "检测中提示消息",
+    "type": "string",
+    "default": "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中..."
+  },
+  "process_prompt": {
+    "description": "过程模拟提示词",
+    "type": "text",
+    "default": "使用{nickname}的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
+  },
+  "advice_prompt": {
+    "description": "评语建议提示词",
+    "type": "text",
+    "default": "使用{nickname}的简称称呼，对{nickname}的今日人品值{jrrp}给出你的评语和建议，50字以内"
+  },
+  "result_template": {
+    "description": "占卜结果模板",
+    "type": "text",
+    "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}",
+    "hint": "支持变量: {process} {jrrp} {fortune} {advice}"
+  },
+  "query_template": {
+    "description": "查询结果模板",
+    "type": "text",
+    "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
+    "hint": "支持变量: {nickname} {jrrp} {fortune} {femoji}"
+  },
+  "history_template": {
+    "description": "历史记录模板",
+    "type": "text",
+    "default": "📚 {nickname} 的人品历史记录\n{records}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}",
+    "hint": "支持变量: {nickname} {records} {avgjrrp} {maxjrrp} {minjrrp}"
+  },
+  "rank_template": {
+    "description": "排行榜模板",
+    "type": "text",
+    "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}",
+    "hint": "支持变量: {date} {ranks}"
+  },
+  "rank_item_template": {
+    "description": "排行项模板",
+    "type": "text",
+    "default": "{medal} {nickname}: {jrrp} ({fortune})",
+    "hint": "支持变量: {medal} {nickname} {jrrp} {fortune}"
   },
   "llm_provider_id": {
     "description": "LLM提供商ID",
     "type": "string",
     "default": "",
-    "hint": "留空使用默认，或填写AstrBot中配置的provider_id"
+    "hint": "留空使用AstrBot默认提供商"
   },
   "llm_api_key": {
     "description": "自定义LLM API Key",
     "type": "string",
     "default": "",
-    "hint": "当provider_id为空时使用"
+    "hint": "仅在未指定provider_id时使用"
   },
   "llm_api_url": {
     "description": "自定义LLM API URL",
     "type": "string",
     "default": "",
-    "hint": "支持到/v1或/v1/chat/completions"
+    "hint": "支持OpenAI兼容接口"
   },
   "llm_model": {
     "description": "自定义LLM模型",
     "type": "string",
     "default": "",
-    "hint": "如gpt-3.5-turbo"
+    "hint": "如: gpt-3.5-turbo"
   },
   "persona_name": {
     "description": "占卜师人格名称",
     "type": "string",
     "default": "",
-    "hint": "留空使用默认人格"
+    "hint": "留空使用AstrBot默认人格"
   }
 }
