@@ -71,81 +71,107 @@ class DailyFortunePlugin(Star):
 
         logger.info("DailyFortunePlugin 初始化完成")
 
-    def normalize_api_url(self, url: str) -> str:
-        """智能识别并标准化API URL"""
-        if not url:
-            return ""
+    def ensure_data_dir(self):
+        """确保数据目录存在"""
+        os.makedirs(self.data_dir, exist_ok=True)
 
-        # 移除尾部斜杠
-        url = url.rstrip('/')
-
-        # 如果已经是完整的chat/completions地址，返回去掉这部分的基础URL
-        if url.endswith('/chat/completions'):
-            return url[:-len('/chat/completions')]
-        elif url.endswith('/v1/chat/completions'):
-            return url[:-len('/chat/completions')]
-        elif url.endswith('/v1'):
-            return url
-        else:
-            # 假设是基础URL，添加/v1
-            return f"{url}/v1"
-
-    async def get_llm_provider(self):
-        """获取LLM提供商，支持自定义OpenAI兼容API"""
-        llm_config = self.config.get("llm", {})
-
-        # 优先使用provider_id
-        provider_id = llm_config.get("provider_id") if isinstance(llm_config, dict) else None
-        if provider_id:
-            provider = self.context.get_provider_by_id(provider_id)
-            if provider:
-                return provider
-
-        # 如果没有provider_id或获取失败，检查是否有自定义API配置
-        api_key = llm_config.get("api_key")
-        api_url = llm_config.get("api_url")
-        model = llm_config.get("model", "gpt-3.5-turbo")
-
-        if api_key and api_url:
-            # 创建自定义OpenAI兼容提供商
+    def load_data(self, filename: str) -> Optional[Dict]:
+        """加载数据文件"""
+        filepath = os.path.join(self.data_dir, filename)
+        if os.path.exists(filepath):
             try:
-                # 标准化URL
-                base_url = self.normalize_api_url(api_url)
-
-                # 动态创建provider配置
-                custom_provider_config = {
-                    "id": f"custom_openai_{hash(api_key[:8])}",
-                    "type": "openai_compatible",
-                    "api_key": api_key,
-                    "base_url": base_url,
-                    "model": model
-                }
-
-                # 尝试通过provider_manager创建临时provider
-                # 注意：这需要AstrBot支持动态provider创建
-                # 如果不支持，则fallback到默认provider
-                logger.info(f"使用自定义OpenAI兼容API: {base_url}")
-
-                # 这里需要根据AstrBot的实际API进行调整
-                # 可能需要直接创建OpenAI client或使用其他方式
-
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
             except Exception as e:
-                logger.error(f"创建自定义LLM提供商失败: {e}")
+                logger.error(f"加载数据文件 {filename} 失败: {e}")
+        return None
 
-        # 最后使用默认provider
-        return self.context.get_using_provider()
+    def save_data(self, data: Dict, filename: str):
+        """保存数据文件"""
+        filepath = os.path.join(self.data_dir, filename)
+        try:
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.error(f"保存数据文件 {filename} 失败: {e}")
+
+    def get_today_key(self) -> str:
+        """获取今天的日期键"""
+        return datetime.now().strftime("%Y-%m-%d")
+
+    def get_fortune_level(self, jrrp: int) -> Tuple[str, str]:
+        """根据人品值获取运势等级和表情"""
+        for level, min_val, max_val in self.fortune_levels:
+            if min_val <= jrrp <= max_val:
+                return level, self.fortune_emojis[level]
+        return "平", "😐"
+
+    async def get_user_info(self, event: AstrMessageEvent) -> Dict[str, str]:
+        """从rawmessage_viewer1插件获取用户增强信息"""
+        user_info = {
+            "nickname": event.get_sender_name() or "未知",
+            "card": "",
+            "title": ""
+        }
+
+        try:
+            # 尝试从event中获取增强信息
+            message_id = event.message_obj.message_id
+
+            # 查找rawmessage_viewer1插件
+            raw_viewer = None
+            for star_meta in self.context.get_all_stars():
+                if star_meta.name == "astrbot_plugin_rawmessage_viewer1":
+                    raw_viewer = star_meta.instance
+                    break
+
+            if raw_viewer and hasattr(raw_viewer, 'enhanced_messages'):
+                if message_id in raw_viewer.enhanced_messages:
+                    enhanced_msg = raw_viewer.enhanced_messages[message_id]
+                    sender = enhanced_msg.get("sender", {})
+                    user_info["card"] = sender.get("card", "") or sender.get("nickname", "")
+                    user_info["title"] = sender.get("title", "")
+        except Exception as e:
+            logger.debug(f"获取增强用户信息失败: {e}")
+
+        return user_info
+
+    def calculate_jrrp(self, user_id: str, date: str) -> int:
+        """计算人品值"""
+        algorithm = self.config.get("jrrp_algorithm", "hash")
+
+        if algorithm == "hash":
+            # 基于哈希的算法
+            seed = f"{user_id}_{date}"
+            hash_value = hash(seed)
+            return abs(hash_value) % 101
+        elif algorithm == "random":
+            # 真随机算法
+            return random.randint(0, 100)
+        else:
+            # 默认算法
+            seed = f"{user_id}_{date}"
+            random.seed(seed)
+            result = random.randint(0, 100)
+            random.seed()  # 重置随机种子
+            return result
 
     async def generate_process_and_advice(self, event: AstrMessageEvent, user_info: Dict, jrrp: int, fortune: str) -> Tuple[str, str]:
         """通过LLM生成过程模拟和评语"""
         try:
-            # 获取provider
-            provider = await self.get_llm_provider()
+            # 获取配置的provider或使用默认
+            llm_config = self.config.get("llm", {})
+            provider_id = llm_config.get("provider_id") if isinstance(llm_config, dict) else None
+
+            if provider_id:
+                provider = self.context.get_provider_by_id(provider_id)
+            else:
+                provider = self.context.get_using_provider()
 
             if not provider:
                 return "水晶球闪烁着神秘的光芒...", "愿好运常伴你左右"
 
             # 获取人格
-            llm_config = self.config.get("llm", {})
             persona_name = llm_config.get("persona_name") if isinstance(llm_config, dict) else None
             persona_prompt = ""
 
