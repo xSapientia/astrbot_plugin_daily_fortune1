@@ -14,7 +14,9 @@ import astrbot.api.message_components as Comp
 from astrbot.api.provider import ProviderRequest, LLMResponse
 
 
-@register("daily_fortune", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
+@register("astrbot_plugin_daily_fortune1", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
+
+
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
@@ -120,30 +122,46 @@ class DailyFortunePlugin(Star):
             # 查找指定人格
             personas = self.context.provider_manager.personas
             for persona in personas:
-                # 修正：persona 可能是字典或对象，需要兼容处理
+                # personas 可能是 Personality 对象列表
                 try:
-                    # 尝试作为对象访问
-                    if hasattr(persona, 'name') and persona.name == persona_name:
-                        return persona.prompt if hasattr(persona, 'prompt') else ""
-                except:
-                    # 尝试作为字典访问
-                    if isinstance(persona, dict) and persona.get('name') == persona_name:
-                        return persona.get('prompt', '')
+                    # 检查是否是 Personality 对象
+                    if hasattr(persona, '__dict__'):
+                        # 使用属性访问
+                        p_name = getattr(persona, 'name', None)
+                        if p_name == persona_name:
+                            return getattr(persona, 'prompt', '')
+                    elif isinstance(persona, dict):
+                        # 字典访问
+                        if persona.get('name') == persona_name:
+                            return persona.get('prompt', '')
+                except Exception as e:
+                    logger.debug(f"检查人格时出错: {e}")
+                    continue
             logger.warning(f"指定的人格 {persona_name} 未找到，使用默认人格")
 
         # 使用默认人格
-        default_persona = self.context.provider_manager.selected_default_persona
-        if default_persona and "name" in default_persona:
-            personas = self.context.provider_manager.personas
-            for persona in personas:
-                try:
-                    # 尝试作为对象访问
-                    if hasattr(persona, 'name') and persona.name == default_persona["name"]:
-                        return persona.prompt if hasattr(persona, 'prompt') else ""
-                except:
-                    # 尝试作为字典访问
-                    if isinstance(persona, dict) and persona.get('name') == default_persona["name"]:
-                        return persona.get('prompt', '')
+        try:
+            default_persona = self.context.provider_manager.selected_default_persona
+            if default_persona:
+                # default_persona 通常是一个字典 {"name": "xxx"}
+                default_name = default_persona.get("name") if isinstance(default_persona, dict) else None
+
+                if default_name:
+                    personas = self.context.provider_manager.personas
+                    for persona in personas:
+                        try:
+                            if hasattr(persona, '__dict__'):
+                                p_name = getattr(persona, 'name', None)
+                                if p_name == default_name:
+                                    return getattr(persona, 'prompt', '')
+                            elif isinstance(persona, dict):
+                                if persona.get('name') == default_name:
+                                    return persona.get('prompt', '')
+                        except:
+                            continue
+        except Exception as e:
+            logger.debug(f"获取默认人格失败: {e}")
+
         return ""
 
     async def _call_llm_for_fortune(self, event: AstrMessageEvent, fortune_value: int) -> str:
@@ -151,7 +169,7 @@ class DailyFortunePlugin(Star):
         try:
             provider = await self._get_llm_provider()
             if not provider:
-                return f"人品值：{fortune_value}，运势：{self._get_fortune_level_desc(fortune_value)}"
+                return f"🔮 水晶球显现出数字...\n\n💎 人品值：{fortune_value}\n✨ 运势：{self._get_fortune_level_desc(fortune_value)}\n💬 建议：保持平常心，一切顺其自然。"
 
             user_name = event.get_sender_name()
             fortune_desc = self._get_fortune_level_desc(fortune_value)
@@ -282,7 +300,9 @@ class DailyFortunePlugin(Star):
         # 筛选今日该群的人品记录
         group_fortunes = []
         for key, info in self.fortune_data.items():
-            if key.endswith(f"_{today}") and info.get("group_id") == group_id:
+            if key.endswith(f"_{today}") and (info.get("group_id") == group_id or
+                                             (info.get("group_id") == "private" and
+                                              info.get("user_id") in await self._get_group_member_list(event, group_id))):
                 group_fortunes.append(info)
 
         if not group_fortunes:
@@ -311,15 +331,30 @@ class DailyFortunePlugin(Star):
 
         yield event.plain_result(result)
 
+    async def _get_group_member_list(self, event: AstrMessageEvent, group_id: str) -> list:
+        """获取群成员列表"""
+        try:
+            if event.get_platform_name() == "aiocqhttp":
+                from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
+                if isinstance(event, AiocqhttpMessageEvent):
+                    client = event.bot
+                    members = await client.api.get_group_member_list(group_id=group_id)
+                    return [str(m.get('user_id')) for m in members if m.get('user_id')]
+        except:
+            pass
+        return []
+
     @filter.command("jrrphistory")
     async def jrrp_history_command(self, event: AstrMessageEvent):
         """查看个人人品历史"""
-        await self._show_history(event)
+        async for result in self._show_history(event):
+            yield result
 
     @filter.command("jrrphi")
     async def jrrp_hi_command(self, event: AstrMessageEvent):
         """查看个人人品历史（简化命令）"""
-        await self._show_history(event)
+        async for result in self._show_history(event):
+            yield result
 
     async def _show_history(self, event: AstrMessageEvent):
         """显示个人人品历史"""
@@ -367,12 +402,14 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrpdelete")
     async def jrrp_delete_command(self, event: AstrMessageEvent, confirm: str = ""):
         """删除个人数据"""
-        await self._delete_user_data(event, confirm)
+        async for result in self._delete_user_data(event, confirm):
+            yield result
 
     @filter.command("jrrpdel")
     async def jrrp_del_command(self, event: AstrMessageEvent, confirm: str = ""):
         """删除个人数据（简化命令）"""
-        await self._delete_user_data(event, confirm)
+        async for result in self._delete_user_data(event, confirm):
+            yield result
 
     async def _delete_user_data(self, event: AstrMessageEvent, confirm: str):
         """删除用户数据"""
@@ -388,7 +425,6 @@ class DailyFortunePlugin(Star):
         user_name = event.get_sender_name()
 
         # 删除今日人品数据
-        today = date.today().strftime("%Y-%m-%d")
         keys_to_delete = []
         for key in self.fortune_data.keys():
             if key.startswith(f"{user_id}_"):
