@@ -5,8 +5,7 @@ version: "1.0.0"
 repo: "https://github.com/example/astrbot_plugin_daily_fortune1"
 plugin_type: "star"
 entry: "main.py"
-requirements:
-  - "pathlib"
+requirements: []
 tags:
   - "娱乐"
   - "人品"
