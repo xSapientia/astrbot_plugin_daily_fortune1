@@ -84,7 +84,7 @@ class DailyFortunePlugin(Star):
                 return fortune, emoji
         return "吉", "😊"
 
-    def _get_fortune_value(self) -> int:
+def _get_fortune_value(self) -> int:
         """根据配置的算法获取人品值"""
         algorithm = self._get_config("fortune_algorithm", "uniform")
 
@@ -140,24 +140,21 @@ class DailyFortunePlugin(Star):
             return max(0, min(100, base + noise))
 
         elif algorithm == "weighted":
-            # 加权算法 - 根据权重表
-            weights = self._get_config("fortune_weights", {
-                "0-20": 10,
-                "21-40": 20,
-                "41-60": 40,
-                "61-80": 20,
-                "81-100": 10
-            })
+            # 加权算法 - 使用单独的配置项
+            weights = {
+                (0, 20): self._get_config("fortune_weight_0_20", 10),
+                (21, 40): self._get_config("fortune_weight_21_40", 20),
+                (41, 60): self._get_config("fortune_weight_41_60", 40),
+                (61, 80): self._get_config("fortune_weight_61_80", 20),
+                (81, 100): self._get_config("fortune_weight_81_100", 10)
+            }
 
             # 构建权重列表
             choices = []
-            for range_str, weight in weights.items():
-                start, end = map(int, range_str.split('-'))
-                choices.extend(range(start, end + 1) for _ in range(weight))
+            for (start, end), weight in weights.items():
+                choices.extend([random.randint(start, end) for _ in range(weight)])
 
-            # 展平列表并随机选择
-            flat_choices = [val for sublist in choices for val in sublist]
-            return random.choice(flat_choices) if flat_choices else random.randint(0, 100)
+            return random.choice(choices) if choices else random.randint(0, 100)
 
         elif algorithm == "custom":
             # 自定义算法 - 使用配置的表达式
