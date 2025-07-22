@@ -3,3 +3,4 @@ desc: 今日人品测试插件 - 支持高度自定义和多种随机算法
 version: v0.0.3
 author: xSapientia
 repo: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
+config_version: "1.0"  # 添加配置版本号
