@@ -23,17 +23,35 @@
     "default": 20,
     "hint": "仅在算法为normal时生效，控制人品值的离散程度"
   },
-  "fortune_weights": {
-    "description": "加权算法权重表",
-    "type": "object",
-    "default": {
-      "0-20": 10,
-      "21-40": 20,
-      "41-60": 40,
-      "61-80": 20,
-      "81-100": 10
-    },
-    "hint": "仅在算法为weighted时生效，定义各区间的权重"
+  "fortune_weight_0_20": {
+    "description": "权重：0-20分区间",
+    "type": "int",
+    "default": 10,
+    "hint": "算法为weighted时生效"
+  },
+  "fortune_weight_21_40": {
+    "description": "权重：21-40分区间",
+    "type": "int",
+    "default": 20,
+    "hint": "算法为weighted时生效"
+  },
+  "fortune_weight_41_60": {
+    "description": "权重：41-60分区间",
+    "type": "int",
+    "default": 40,
+    "hint": "算法为weighted时生效"
+  },
+  "fortune_weight_61_80": {
+    "description": "权重：61-80分区间",
+    "type": "int",
+    "default": 20,
+    "hint": "算法为weighted时生效"
+  },
+  "fortune_weight_81_100": {
+    "description": "权重：81-100分区间",
+    "type": "int",
+    "default": 10,
+    "hint": "算法为weighted时生效"
   },
   "fortune_custom_expression": {
     "description": "自定义算法表达式",
