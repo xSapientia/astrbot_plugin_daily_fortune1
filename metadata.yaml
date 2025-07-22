@@ -1,5 +1,5 @@
 name: astrbot_plugin_daily_fortune1
-desc: 今日人品测试插件增强版，支持自定义模板和增强用户信息
-version: v0.0.1
 author: xSapientia
-repo: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
+version: 0.0.1
+description: 每日运势和人品值插件
+repository: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
