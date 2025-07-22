@@ -1,86 +1,103 @@
 {
-  "enabled": {
+  "enable_plugin": {
     "description": "插件总开关",
     "type": "bool",
-    "default": true,
-    "hint": "控制插件是否启用"
-  },
-  "min_fortune": {
-    "description": "人品值下限",
-    "type": "int",
-    "default": 0,
-    "hint": "每日人品值的最小值"
-  },
-  "max_fortune": {
-    "description": "人品值上限",
-    "type": "int",
-    "default": 100,
-    "hint": "每日人品值的最大值"
-  },
-  "provider_id": {
-    "description": "LLM供应商ID",
-    "type": "string",
-    "default": "",
-    "hint": "指定使用的大语言模型供应商ID，留空则使用默认供应商"
-  },
-  "api_key": {
-    "description": "OpenAI兼容API密钥",
-    "type": "string",
-    "default": "",
-    "hint": "自定义API的访问密钥"
-  },
-  "api_url": {
-    "description": "OpenAI兼容API地址",
-    "type": "string",
-    "default": "",
-    "hint": "API地址，如 https://api.openai.com/v1 或 https://api.example.com/v1/chat/completions"
-  },
-  "model_name": {
-    "description": "模型名称",
-    "type": "string",
-    "default": "",
-    "hint": "使用的模型名称，如 gpt-3.5-turbo"
-  },
-  "persona_name": {
-    "description": "LLM人格名称",
-    "type": "string",
-    "default": "",
-    "hint": "指定使用的人格情景名称，留空则使用默认人格"
+    "default": true
   },
   "detecting_message": {
-    "description": "检测中提示文本",
+    "description": "检测中提示消息",
     "type": "string",
-    "default": "神秘的能量汇聚，窥见你的命运，正在祈祷中...",
-    "hint": "首次检测人品时显示的提示信息"
+    "default": "神秘的能量汇聚，[{title}]{card}({nickname})，你的命运即将显现，正在祈祷中..."
   },
-  "detection_prompt": {
-    "description": "人品检测过程提示词",
+  "process_prompt": {
+    "description": "过程模拟提示词",
     "type": "text",
-    "default": "测试今日人品的时候，显示user_id的 title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字",
-    "hint": "描述人品检测过程的提示词"
+    "default": "使用{title}{card}/{nickname}或简称称呼user_id，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
   },
-  "suggestion_prompt": {
-    "description": "建议/吐槽提示词",
+  "process_template": {
+    "description": "过程模拟模板（优先级高于prompt）",
     "type": "text",
-    "default": "你对使用人今日人品值下的建议，字数不超过50字",
-    "hint": "针对人品值给出建议的提示词"
+    "default": ""
   },
-  "rank_display_limit": {
+  "advice_prompt": {
+    "description": "评语提示词",
+    "type": "text",
+    "default": "使用{title}{card}/{nickname}或简称称呼user_id，对user_id的今日人品值给出你的评语和建议，50字以内"
+  },
+  "advice_template": {
+    "description": "评语模板（优先级高于prompt）",
+    "type": "text",
+    "default": ""
+  },
+  "result_cache_days": {
+    "description": "结果缓存天数",
+    "type": "int",
+    "default": 7
+  },
+  "show_cached_result": {
+    "description": "查询时是否显示缓存的结果文本",
+    "type": "bool",
+    "default": true
+  },
+  "random_template": {
+    "description": "随机结果模板",
+    "type": "text",
+    "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}"
+  },
+  "query_template": {
+    "description": "查询结果模板",
+    "type": "text",
+    "default": "📌 今日人品\n[{title}]{card}({nickname})，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}"
+  },
+  "rank_template": {
+    "description": "排行榜模板",
+    "type": "text",
+    "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}"
+  },
+  "rank_display_count": {
     "description": "排行榜显示数量",
     "type": "int",
     "default": 10,
-    "hint": "排行榜最多显示的人数，-1表示无限制"
+    "hint": "-1表示显示所有"
   },
-  "delete_config_on_uninstall": {
-    "description": "卸载时删除配置文件",
-    "type": "bool",
-    "default": false,
-    "hint": "插件卸载时是否删除位于 data/config 的配置文件"
+  "history_template": {
+    "description": "历史记录模板",
+    "type": "text",
+    "default": "📚 {name} 的人品历史记录\n{items}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}"
   },
-  "delete_data_on_uninstall": {
-    "description": "卸载时删除数据文件",
-    "type": "bool",
-    "default": false,
-    "hint": "插件卸载时是否删除位于 data/plugin_data/astrbot_plugin_daily_fortune 的数据文件"
+  "history_days": {
+    "description": "历史记录天数",
+    "type": "int",
+    "default": 30
+  },
+  "llm_provider_id": {
+    "description": "LLM提供商ID",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用默认，或填写AstrBot中配置的provider_id"
+  },
+  "llm_api_key": {
+    "description": "自定义LLM API Key",
+    "type": "string",
+    "default": "",
+    "hint": "当provider_id为空时使用"
+  },
+  "llm_api_url": {
+    "description": "自定义LLM API URL",
+    "type": "string",
+    "default": "",
+    "hint": "支持到/v1或/v1/chat/completions"
+  },
+  "llm_model": {
+    "description": "自定义LLM模型",
+    "type": "string",
+    "default": "",
+    "hint": "如gpt-3.5-turbo"
+  },
+  "persona_name": {
+    "description": "占卜师人格名称",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用默认人格"
   }
 }
