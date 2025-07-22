@@ -14,22 +14,14 @@ import astrbot.api.message_components as Comp
 from astrbot.api.provider import ProviderRequest, LLMResponse
 
 
-@register(
-    "astrbot_plugin_daily_fortune1", 
-    "阿凌", 
-    "今日人品检测插件", 
-    "1.0.0", 
-    "https://github.com/example/astrbot_plugin_daily_fortune1"
-)
-
-
+@register("daily_fortune", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
 
         # 数据存储路径
-        self.data_dir = Path("data/plugin_data/astrbot_plugin_daily_fortune1")
+        self.data_dir = Path("data/plugin_data/daily_fortune")
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.fortune_file = self.data_dir / "fortune_data.json"
@@ -128,8 +120,15 @@ class DailyFortunePlugin(Star):
             # 查找指定人格
             personas = self.context.provider_manager.personas
             for persona in personas:
-                if persona.name == persona_name:
-                    return persona.prompt
+                # 修正：persona 可能是字典或对象，需要兼容处理
+                try:
+                    # 尝试作为对象访问
+                    if hasattr(persona, 'name') and persona.name == persona_name:
+                        return persona.prompt if hasattr(persona, 'prompt') else ""
+                except:
+                    # 尝试作为字典访问
+                    if isinstance(persona, dict) and persona.get('name') == persona_name:
+                        return persona.get('prompt', '')
             logger.warning(f"指定的人格 {persona_name} 未找到，使用默认人格")
 
         # 使用默认人格
@@ -137,9 +136,14 @@ class DailyFortunePlugin(Star):
         if default_persona and "name" in default_persona:
             personas = self.context.provider_manager.personas
             for persona in personas:
-                if persona.name == default_persona["name"]:
-                    return persona.prompt
-
+                try:
+                    # 尝试作为对象访问
+                    if hasattr(persona, 'name') and persona.name == default_persona["name"]:
+                        return persona.prompt if hasattr(persona, 'prompt') else ""
+                except:
+                    # 尝试作为字典访问
+                    if isinstance(persona, dict) and persona.get('name') == default_persona["name"]:
+                        return persona.get('prompt', '')
         return ""
 
     async def _call_llm_for_fortune(self, event: AstrMessageEvent, fortune_value: int) -> str:
@@ -160,16 +164,15 @@ class DailyFortunePlugin(Star):
 
             full_prompt = f"""用户【{user_name}】今日人品值为{fortune_value}，运势为{fortune_desc}。
 
-请完成以下任务：
-1. {detection_prompt}
-2. {suggestion_prompt}
+第一部分：{detection_prompt}
+第二部分：{suggestion_prompt}
 
-输出格式要求：
-🔮 [检测过程描述]
+请分两部分回复，使用以下格式：
+🔮 [第一部分内容]
 
 💎 人品值：{fortune_value}
 ✨ 运势：{fortune_desc}
-💬 建议：[你的建议]"""
+💬 建议：[第二部分内容]"""
 
             # 获取人格提示
             system_prompt = await self._get_persona_prompt()
@@ -187,11 +190,11 @@ class DailyFortunePlugin(Star):
             if response and response.completion_text:
                 return response.completion_text
             else:
-                return f"💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切都会好起来的。"
+                return f"🔮 水晶球显现出数字...\n\n💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切顺其自然。"
 
         except Exception as e:
             logger.error(f"调用LLM失败: {e}")
-            return f"💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切都会好起来的。"
+            return f"🔮 水晶球显现出数字...\n\n💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切顺其自然。"
 
     @filter.command("jrrp")
     async def jrrp_command(self, event: AstrMessageEvent):
@@ -279,8 +282,7 @@ class DailyFortunePlugin(Star):
         # 筛选今日该群的人品记录
         group_fortunes = []
         for key, info in self.fortune_data.items():
-            if key.endswith(f"_{today}") and (info.get("group_id") == group_id or
-                (info.get("group_id") == "private" and group_id)):
+            if key.endswith(f"_{today}") and info.get("group_id") == group_id:
                 group_fortunes.append(info)
 
         if not group_fortunes:
@@ -298,7 +300,7 @@ class DailyFortunePlugin(Star):
             display_limit = min(display_limit, len(group_fortunes))
 
         # 构建排行榜
-        result = f"🏆 今日群内人品排行榜(共{len(group_fortunes)}人)\n\n"
+        result = f"🏆 今日群内人品排行榜 (共{len(group_fortunes)}人)\n\n"
 
         for i, info in enumerate(group_fortunes[:display_limit]):
             rank_emoji = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"{i+1}."
