@@ -2,6 +2,7 @@ import json
 import asyncio
 import random
 import hashlib
+import numpy as np
 from datetime import datetime, date
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -60,19 +61,22 @@ class DailyFortunePlugin(Star):
             try:
                 self.provider = self.context.get_provider_by_id(provider_id)
                 if self.provider:
-                    logger.info(f"使用provider_id: {provider_id} 连接成功")
+                    logger.info(f"[daily_fortune] 使用provider_id: {provider_id}")
+                    # 测试连接
+                    asyncio.create_task(self._test_provider_connection())
                 else:
-                    logger.warning(f"未找到provider_id: {provider_id}，将使用默认提供商")
+                    logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}，将使用默认提供商")
                     self.provider = None
             except Exception as e:
-                logger.error(f"获取provider失败: {e}")
+                logger.error(f"[daily_fortune] 获取provider失败: {e}")
                 self.provider = None
         else:
             # 使用第三方接口配置
             api_config = self.config.get("llm_api", {})
             if api_config.get("api_key") and api_config.get("url"):
-                logger.info(f"使用第三方接口: {api_config['url']}")
-                # 这里需要根据实际情况创建provider
+                logger.info(f"[daily_fortune] 配置了第三方接口: {api_config['url']}")
+                # 创建自定义provider
+                asyncio.create_task(self._test_third_party_api(api_config))
                 self.provider = None
             else:
                 self.provider = None
@@ -85,11 +89,73 @@ class DailyFortunePlugin(Star):
             for p in personas:
                 if p.get('name') == self.persona_name:
                     prompt = p.get('prompt', '')
-                    logger.info(f"使用人格: {self.persona_name}, prompt前20字符: {prompt[:20]}...")
+                    logger.info(f"[daily_fortune] 使用人格: {self.persona_name}, prompt前20字符: {prompt[:20]}...")
                     found = True
                     break
             if not found:
-                logger.warning(f"未找到人格: {self.persona_name}")
+                logger.warning(f"[daily_fortune] 未找到人格: {self.persona_name}")
+        else:
+            # 输出默认人格信息
+            default_persona = self.context.provider_manager.selected_default_persona
+            if default_persona:
+                persona_name = default_persona.get("name", "未知")
+                # 查找完整人格信息
+                personas = self.context.provider_manager.personas
+                for p in personas:
+                    if p.get('name') == persona_name:
+                        prompt = p.get('prompt', '')
+                        logger.info(f"[daily_fortune] 使用默认人格: {persona_name}, prompt前20字符: {prompt[:20]}...")
+                        break
+
+    async def _test_provider_connection(self):
+        """测试provider连接"""
+        try:
+            if self.provider:
+                response = await self.provider.text_chat(
+                    prompt="测试连接",
+                    contexts=[],
+                    system_prompt=""
+                )
+                if response and response.completion_text:
+                    logger.info(f"[daily_fortune] Provider连接测试成功")
+                else:
+                    logger.warning(f"[daily_fortune] Provider连接测试失败：无响应")
+        except Exception as e:
+            logger.error(f"[daily_fortune] Provider连接测试失败: {e}")
+
+    async def _test_third_party_api(self, api_config):
+        """测试第三方API连接"""
+        try:
+            import aiohttp
+
+            # 智能处理URL
+            url = api_config['url'].rstrip('/')
+            if not url.endswith('/chat/completions'):
+                if url.endswith('/v1'):
+                    url += '/chat/completions'
+                else:
+                    url += '/v1/chat/completions'
+
+            headers = {
+                'Authorization': f"Bearer {api_config['api_key']}",
+                'Content-Type': 'application/json'
+            }
+
+            data = {
+                'model': api_config.get('model', 'gpt-3.5-turbo'),
+                'messages': [{'role': 'user', 'content': '测试连接'}],
+                'max_tokens': 10
+            }
+
+            async with aiohttp.ClientSession() as session:
+                async with session.post(url, headers=headers, json=data, timeout=10) as resp:
+                    if resp.status == 200:
+                        logger.info(f"[daily_fortune] 第三方API连接测试成功: {api_config['url']}")
+                    else:
+                        text = await resp.text()
+                        logger.warning(f"[daily_fortune] 第三方API连接测试失败: {resp.status} - {text}")
+        except Exception as e:
+            logger.error(f"[daily_fortune] 第三方API连接测试失败: {e}")
 
     def _load_data(self, file_path: Path) -> Dict:
         """加载JSON数据"""
@@ -123,13 +189,45 @@ class DailyFortunePlugin(Star):
             seed = f"{user_id}_{today}"
             hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
             return hash_value % 101
+
         elif algorithm == "random":
             # 纯随机算法
             random.seed(f"{user_id}_{today}")
             return random.randint(0, 100)
+
+        elif algorithm == "normal":
+            # 正态分布算法（中间值概率高）
+            random.seed(f"{user_id}_{today}")
+            # 均值50，标准差20的正态分布
+            value = int(np.random.normal(50, 20))
+            # 限制在0-100范围内
+            return max(0, min(100, value))
+
+        elif algorithm == "lucky":
+            # 幸运算法（高分值概率较高）
+            random.seed(f"{user_id}_{today}")
+            # 使用beta分布，α=8, β=2，偏向高分
+            value = int(np.random.beta(8, 2) * 100)
+            return value
+
+        elif algorithm == "challenge":
+            # 挑战算法（极端值概率较高）
+            random.seed(f"{user_id}_{today}")
+            # 30%概率获得极低或极高值
+            if random.random() < 0.3:
+                # 极端值
+                if random.random() < 0.5:
+                    return random.randint(0, 20)  # 极低
+                else:
+                    return random.randint(80, 100)  # 极高
+            else:
+                # 普通值
+                return random.randint(21, 79)
         else:
-            # 默认算法
-            return random.randint(0, 100)
+            # 默认使用hash算法
+            seed = f"{user_id}_{today}"
+            hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
+            return hash_value % 101
 
     def _get_fortune_info(self, jrrp: int) -> tuple:
         """根据人品值获取运势信息"""
@@ -181,23 +279,40 @@ class DailyFortunePlugin(Star):
 
             # 获取当前会话的人格信息
             contexts = []
-            if self.persona_name:
-                # 使用指定的人格
-                personas = self.context.provider_manager.personas
-                for p in personas:
-                    if p.get('name') == self.persona_name:
-                        system_prompt = p.get('prompt', '') + "\n" + system_prompt
-                        break
 
-            response = await provider.text_chat(
-                prompt=prompt,
-                contexts=contexts,
-                system_prompt=system_prompt
-            )
+            # 处理system_prompt - 某些模型可能不支持
+            try:
+                # 首先尝试使用system_prompt
+                if self.persona_name:
+                    # 使用指定的人格
+                    personas = self.context.provider_manager.personas
+                    for p in personas:
+                        if p.get('name') == self.persona_name:
+                            system_prompt = p.get('prompt', '') + "\n" + system_prompt
+                            break
+
+                response = await provider.text_chat(
+                    prompt=prompt,
+                    contexts=contexts,
+                    system_prompt=system_prompt
+                )
+            except Exception as e:
+                # 如果system_prompt导致错误，尝试将其合并到prompt中
+                logger.debug(f"使用system_prompt失败，尝试合并到prompt: {e}")
+                combined_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+                response = await provider.text_chat(
+                    prompt=combined_prompt,
+                    contexts=contexts
+                )
 
             return response.completion_text
         except Exception as e:
             logger.error(f"LLM生成失败: {e}")
+            # 返回备用响应
+            if "过程" in prompt:
+                return "水晶球中浮现出神秘的光芒..."
+            elif "建议" in prompt:
+                return "保持乐观的心态，好运自然来。"
             return "生成失败"
 
     @filter.command("jrrp")
@@ -208,7 +323,7 @@ class DailyFortunePlugin(Star):
         nickname = user_info["nickname"]
         today = self._get_today_key()
 
-        # 初始化今日数据
+        # 初始化今日数据（修复KeyError）
         if today not in self.daily_data:
             self.daily_data[today] = {}
 
@@ -279,7 +394,10 @@ class DailyFortunePlugin(Star):
             advice=advice
         )
 
-        # 缓存结果
+        # 缓存结果（确保today已存在）
+        if today not in self.daily_data:
+            self.daily_data[today] = {}
+
         self.daily_data[today][user_id] = {
             "jrrp": jrrp,
             "fortune": fortune,
