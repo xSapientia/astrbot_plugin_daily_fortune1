@@ -1,28 +1,12 @@
 name: astrbot_plugin_daily_fortune1
-author: xSapientia
 version: 0.0.1
-description: 每日人品值查询插件，提供运势测算、排行榜、历史记录等功能
+author: xSapientia
+description: 每日人品值和运势查询插件，支持排行榜和历史记录
 repository: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
 tags:
   - 娱乐
   - 运势
   - 每日
-  - 人品值
-readme: |
-  # 每日人品值插件
-
-  提供每日人品值查询、运势测算、排行榜、历史记录等功能。
-
-  ## 功能特点
-  - 每日人品值查询，支持LLM生成个性化评语
-  - 群内排行榜功能
-  - 个人历史记录查询
-  - 支持从rawmessage_viewer1插件获取用户增强信息
-  - 高度可配置的模板系统
-
-  ## 指令列表
-  - `/jrrp` - 查询今日人品值
-  - `/jrrprank` - 查看群内人品排行榜
-  - `/jrrphistory` 或 `/jrrphi` - 查看历史记录
-  - `/jrrpdelete` 或 `/jrrpdel` - 删除个人记录
-  - `/jrrpreset` 或 `/jrrpre` - 重置所有数据（仅管理员）
+  - 人品
+requirements:
+  - astrbot>=3.4.0
