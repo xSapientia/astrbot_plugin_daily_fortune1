@@ -1,5 +1,5 @@
 name: astrbot_plugin_daily_fortune1
 desc: 今日人品测试插件 - 完全重构版，支持变量系统、模板系统、LLM配置
-version: v0.0.1
+version: v0.0.2
 author: xSapientia
 repo: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
