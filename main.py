@@ -10,7 +10,6 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
-from astrbot.api.provider import ProviderRequest
 
 
 @register(
@@ -136,7 +135,9 @@ class DailyFortunePlugin(Star):
             # 默认算法
             seed = f"{user_id}_{date}"
             random.seed(seed)
-            return random.randint(0, 100)
+            result = random.randint(0, 100)
+            random.seed()  # 重置随机种子
+            return result
 
     async def generate_process_and_advice(self, event: AstrMessageEvent, user_info: Dict, jrrp: int, fortune: str) -> Tuple[str, str]:
         """通过LLM生成过程模拟和评语"""
@@ -286,6 +287,7 @@ class DailyFortunePlugin(Star):
         # 缓存结果
         cache_days = self.config.get("cache_days", 1)
         self.fortune_data[today][user_id] = {
+            "nickname": user_info["nickname"],
             "jrrp": jrrp,
             "fortune": fortune,
             "femoji": femoji,
@@ -423,7 +425,7 @@ class DailyFortunePlugin(Star):
 
         # 格式化历史记录
         history_template = self.config.get("history_template",
-            "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp:.1f}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}")
+            "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}")
 
         result = self.format_template(history_template, {
             "nickname": target_name,
@@ -499,6 +501,13 @@ class DailyFortunePlugin(Star):
                     except:
                         pass
 
+            # 如果这一天没有数据了，删除这一天
+            if not self.fortune_data[date_key]:
+                del self.fortune_data[date_key]
+
     async def terminate(self):
         """插件卸载时的清理工作"""
         logger.info("DailyFortunePlugin 正在卸载...")
+        # 保存最后的数据
+        self.save_data(self.fortune_data, "fortune_data.json")
+        self.save_data(self.history_data, "history_data.json")
