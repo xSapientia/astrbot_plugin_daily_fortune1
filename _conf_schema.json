@@ -3,8 +3,8 @@
     "description": "人品值随机算法",
     "type": "string",
     "default": "hash",
-    "options": ["hash", "random"],
-    "hint": "hash: 基于用户ID和日期的哈希算法，相同用户相同日期结果固定; random: 纯随机算法"
+    "options": ["hash", "random", "normal", "lucky", "challenge"],
+    "hint": "hash: 基于用户ID和日期的哈希算法; random: 纯随机; normal: 正态分布(中间值概率高); lucky: 幸运算法(高分概率高); challenge: 挑战算法(极端值概率高)"
   },
   "detecting_message": {
     "description": "检测中提示文本",
