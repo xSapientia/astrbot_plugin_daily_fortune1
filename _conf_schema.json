@@ -1,39 +1,79 @@
 {
-  "enable_message_injection": {
-    "description": "是否启用消息注入功能",
-    "type": "bool",
-    "default": true,
-    "hint": "开启后会在每条消息前插入原生消息内容"
-  },
-  "use_image_render": {
-    "description": "是否使用图片渲染",
-    "type": "bool",
-    "default": true,
-    "hint": "开启后查看原生消息时会渲染为图片"
-  },
-  "delete_on_uninstall": {
-    "description": "卸载时删除数据",
-    "type": "bool",
-    "default": false,
-    "hint": "卸载插件时是否删除所有相关数据和配置文件"
-  },
-  "advanced_settings": {
-    "description": "高级设置",
-    "type": "object",
-    "items": {
-      "cache_size": {
-        "description": "消息缓存大小",
-        "type": "int",
-        "default": 100,
-        "hint": "缓存最近多少条增强消息"
-      },
-      "log_level": {
-        "description": "日志级别",
-        "type": "string",
-        "default": "info",
-        "options": ["debug", "info", "warning", "error"],
-        "hint": "设置插件的日志输出级别"
-      }
+  "type": "object",
+  "properties": {
+    "enabled": {
+      "type": "boolean",
+      "title": "插件总开关",
+      "description": "是否启用今日人品功能",
+      "default": true
+    },
+    "min_value": {
+      "type": "integer",
+      "title": "人品值下限",
+      "description": "人品值的最小值",
+      "default": 0,
+      "minimum": 0
+    },
+    "max_value": {
+      "type": "integer",
+      "title": "人品值上限",
+      "description": "人品值的最大值",
+      "default": 100,
+      "minimum": 1
+    },
+    "ranking_limit": {
+      "type": "integer",
+      "title": "排行榜显示数量",
+      "description": "排行榜显示的用户数量，-1表示无限制",
+      "default": 10,
+      "minimum": -1
+    },
+    "detecting_message": {
+      "type": "string",
+      "title": "检测中提示文本",
+      "description": "开始检测人品时的提示消息","default": "神秘的能量汇聚，窥见你的命运，正在祈祷中..."
+    },
+    "detection_prompt": {
+      "type": "string",
+      "title": "人品检测提示词",
+      "description": "用于LLM生成人品检测过程的提示词",
+      "default": "测试今日人品的时候，显示user_id的title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字"
+    },
+    "advice_prompt": {
+      "type": "string",
+      "title": "建议生成提示词",
+      "description": "用于LLM生成建议的提示词",
+      "default": "你对使用人今日人品值下的建议，字数不超过50字"
+    },
+    "llm_provider_id": {
+      "type": "string",
+      "title": "LLM供应商ID",
+      "description": "指定的LLM服务供应商ID，留空则使用默认",
+      "default": ""
+    },
+    "llm_api_key": {
+      "type": "string",
+      "title": "LLM API密钥",
+      "description": "OpenAI兼容格式的API密钥",
+      "default": ""
+    },
+    "llm_api_url": {
+      "type": "string",
+      "title": "LLM API地址",
+      "description": "OpenAI兼容格式的API地址",
+      "default": ""
+    },
+    "llm_model_name": {"type": "string",
+      "title": "LLM模型名称",
+      "description": "指定使用的模型名称",
+      "default": ""
+    },
+    "persona_name": {
+      "type": "string",
+      "title": "人格名称",
+      "description": "指定使用的人格情景名称",
+      "default": ""
     }
-  }
+  },
+  "required": ["enabled"]
 }
