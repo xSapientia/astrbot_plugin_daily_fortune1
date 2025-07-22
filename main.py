@@ -24,6 +24,14 @@ _fortune_lock = asyncio.Lock()
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: dict = None):
         super().__init__(context)
+        # 在 __init__ 方法中添加
+        hasattr(self, 'metadata') and hasattr(self.metadata, 'config'):
+        self.config = self.metadata.config
+        # 监听配置变化
+        if hasattr(self.metadata, 'save_config'):
+            self._config_save_callback = self.metadata.save_config
+
+
         self.context = context
         self.config = config if config else {}
 
