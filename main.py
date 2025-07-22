@@ -14,16 +14,14 @@ import astrbot.api.message_components as Comp
 from astrbot.api.provider import ProviderRequest, LLMResponse
 
 
-@register("astrbot_plugin_daily_fortune1", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
-
-
+@register("daily_fortune", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
 
-        # 数据存储路径
-        self.data_dir = Path("data/plugin_data/daily_fortune")
+        # 数据存储路径 - 修改为指定路径
+        self.data_dir = Path("data/plugin_data/astrbot_plugin_daily_fortune")
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.fortune_file = self.data_dir / "fortune_data.json"
@@ -319,12 +317,18 @@ class DailyFortunePlugin(Star):
         else:
             display_limit = min(display_limit, len(group_fortunes))
 
-        # 构建排行榜
-        result = f"🏆 今日群内人品排行榜 (共{len(group_fortunes)}人)\n\n"
+        # 构建美化的排行榜
+        result = f"📊【今日人品排行榜】{today}\n"
+        result += "━━━━━━━━━━━━━━━\n"
 
         for i, info in enumerate(group_fortunes[:display_limit]):
             rank_emoji = "🥇" if i == 0 else "🥈" if i == 1 else "🥉" if i == 2 else f"{i+1}."
-            result += f"{rank_emoji} {info['user_name']} - {info['fortune_value']} ({info['fortune_desc']})\n"
+            # 格式化名字，确保对齐
+            name = info['user_name']
+            # 限制名字长度
+            if len(name) > 8:
+                name = name[:7] + "..."
+            result += f"{rank_emoji} {name}: {info['fortune_value']} ({info['fortune_desc']})\n"
 
         if len(group_fortunes) > display_limit:
             result += f"\n... 还有{len(group_fortunes) - display_limit}人"
@@ -467,4 +471,21 @@ class DailyFortunePlugin(Star):
 
     async def terminate(self):
         """插件卸载时调用"""
+        import shutil
+
+        # 根据配置决定是否删除数据
+        if self.config.get("delete_data_on_uninstall", False):
+            # 删除数据目录
+            if self.data_dir.exists():
+                shutil.rmtree(self.data_dir)
+                logger.info(f"已删除插件数据目录: {self.data_dir}")
+
+        # 根据配置决定是否删除配置文件
+        if self.config.get("delete_config_on_uninstall", False):
+            # 删除配置文件
+            config_file = Path(f"data/config/astrbot_plugin_daily_fortune1_config.json")
+            if config_file.exists():
+                config_file.unlink()
+                logger.info(f"已删除配置文件: {config_file}")
+
         logger.info("今日人品插件已卸载")
