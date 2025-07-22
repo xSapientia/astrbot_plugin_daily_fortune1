@@ -9,7 +9,6 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
-from astrbot.api.provider import BaseProvider
 
 
 @register(
@@ -39,12 +38,12 @@ class DailyFortunePlugin(Star):
             (0, 1): ("极凶", "💀"),
             (2, 10): ("大凶", "😨"),
             (11, 20): ("凶", "😰"),
-            (21, 30): ("小凶", "🫨"),
-            (31, 40): ("平", "😐"),
+            (21, 30): ("小凶", "😟"),
+            (31, 40): ("末吉", "😐"),
             (41, 60): ("小吉", "🙂"),
-            (61, 80): ("吉", "😊"),
-            (81, 98): ("大吉", "😉"),
-            (99, 100): ("天和", "😇")
+            (61, 80): ("中吉", "😊"),
+            (81, 98): ("大吉", "😄"),
+            (99, 100): ("极吉", "🤩")
         }
 
         # 初始化LLM提供商
