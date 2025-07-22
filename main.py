@@ -83,7 +83,7 @@ class DailyFortunePlugin(Star):
                 return fortune, emoji
         return "吉", "😊"
 
-def _get_fortune_value(self) -> int:
+    def _get_fortune_value(self) -> int:
         """根据配置的算法获取人品值"""
         algorithm = self._get_config("fortune_algorithm", "uniform")
 
@@ -241,9 +241,11 @@ def _get_fortune_value(self) -> int:
 
         if not persona_name:
             # 使用默认人格
-            default_persona = self.context.provider_manager.selected_default_persona
-            if default_persona:
-                persona_name = default_persona.get("name", "")
+            if hasattr(self.context, 'provider_manager'):
+                if hasattr(self.context.provider_manager, 'selected_default_persona'):
+                    default_persona = self.context.provider_manager.selected_default_persona
+                    if default_persona:
+                        persona_name = default_persona.get("name", "")
 
         return persona_name
 
@@ -449,10 +451,9 @@ def _get_fortune_value(self) -> int:
                 # 尝试获取群成员列表
                 if event.get_platform_name() == "aiocqhttp":
                     try:
-                        from astrbot.api.platform import AiocqhttpAdapter
-                        platform = self.context.get_platform(filter.PlatformAdapterType.AIOCQHTTP)
-                        if isinstance(platform, AiocqhttpAdapter):
-                            client = platform.client
+                        # 尝试从平台获取
+                        if hasattr(event, 'bot'):
+                            client = event.bot
                             members = await client.api.get_group_member_list(group_id=group_id)
                             group_members = {str(m['user_id']) for m in members}
                     except:
