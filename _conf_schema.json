@@ -25,13 +25,14 @@
       "type": "integer",
       "title": "排行榜显示数量",
       "description": "排行榜显示的用户数量，-1表示无限制",
-      "default": 10,
+      "default":10,
       "minimum": -1
     },
     "detecting_message": {
       "type": "string",
       "title": "检测中提示文本",
-      "description": "开始检测人品时的提示消息","default": "神秘的能量汇聚，窥见你的命运，正在祈祷中..."
+      "description": "开始检测人品时的提示消息",
+      "default": "神秘的能量汇聚，窥见你的命运，正在祈祷中..."
     },
     "detection_prompt": {
       "type": "string",
@@ -49,8 +50,7 @@
       "type": "string",
       "title": "LLM供应商ID",
       "description": "指定的LLM服务供应商ID，留空则使用默认",
-      "default": ""
-    },
+      "default": ""},
     "llm_api_key": {
       "type": "string",
       "title": "LLM API密钥",
@@ -63,7 +63,8 @@
       "description": "OpenAI兼容格式的API地址",
       "default": ""
     },
-    "llm_model_name": {"type": "string",
+    "llm_model_name": {
+      "type": "string",
       "title": "LLM模型名称",
       "description": "指定使用的模型名称",
       "default": ""
