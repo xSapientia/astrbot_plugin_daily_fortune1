@@ -20,9 +20,23 @@ import astrbot.api.message_components as Comp
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig):
+    def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
-        self.config = config
+        # 处理配置兼容性
+        if config is None:
+            # 如果没有传入config，尝试从文件加载
+            config_path = f"data/config/{self.metadata.name}_config.json"
+            if os.path.exists(config_path):
+                try:
+                    with open(config_path, 'r', encoding='utf-8') as f:
+                        config = json.load(f)
+                except Exception as e:
+                    logger.error(f"加载配置文件失败: {e}")
+                    config = {}
+            else:
+                config = {}
+
+        self.config = config if isinstance(config, dict) else dict(config)
         self.data_dir = f"data/plugin_data/{self.metadata.name}"
         self.ensure_data_dir()
 
@@ -143,7 +157,9 @@ class DailyFortunePlugin(Star):
         """通过LLM生成过程模拟和评语"""
         try:
             # 获取配置的provider或使用默认
-            provider_id = self.config.get("llm", {}).get("provider_id")
+            llm_config = self.config.get("llm", {})
+            provider_id = llm_config.get("provider_id") if isinstance(llm_config, dict) else None
+
             if provider_id:
                 provider = self.context.get_provider_by_id(provider_id)
             else:
@@ -153,8 +169,9 @@ class DailyFortunePlugin(Star):
                 return "水晶球闪烁着神秘的光芒...", "愿好运常伴你左右"
 
             # 获取人格
-            persona_name = self.config.get("llm", {}).get("persona_name")
+            persona_name = llm_config.get("persona_name") if isinstance(llm_config, dict) else None
             persona_prompt = ""
+
             if persona_name:
                 all_personas = self.context.provider_manager.personas
                 persona = next((p for p in all_personas if p.get('name') == persona_name), None)
@@ -162,12 +179,17 @@ class DailyFortunePlugin(Star):
                     persona_prompt = persona.get('prompt', '')
             else:
                 # 使用默认人格
-                default_persona_name = self.context.provider_manager.selected_default_persona.get("name")
-                if default_persona_name:
-                    all_personas = self.context.provider_manager.personas
-                    persona = next((p for p in all_personas if p.get('name') == default_persona_name), None)
-                    if persona:
-                        persona_prompt = persona.get('prompt', '')
+                try:
+                    default_persona = self.context.provider_manager.selected_default_persona
+                    if default_persona and isinstance(default_persona, dict):
+                        default_persona_name = default_persona.get("name")
+                        if default_persona_name:
+                            all_personas = self.context.provider_manager.personas
+                            persona = next((p for p in all_personas if p.get('name') == default_persona_name), None)
+                            if persona:
+                                persona_prompt = persona.get('prompt', '')
+                except:
+                    pass
 
             # 准备变量
             vars_dict = {
@@ -182,7 +204,7 @@ class DailyFortunePlugin(Star):
             process_prompt = self.config.get("process_prompt", "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
             process_prompt = self.format_template(process_prompt, vars_dict)
 
-            process_system = persona_prompt + "\n" + process_prompt
+            process_system = persona_prompt + "\n" + process_prompt if persona_prompt else process_prompt
             process_resp = await provider.text_chat(
                 prompt=f"为{user_info['nickname']}生成今日人品值{jrrp}的占卜过程描述",
                 system_prompt=process_system,
@@ -194,7 +216,7 @@ class DailyFortunePlugin(Star):
             advice_prompt = self.config.get("advice_prompt", "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
             advice_prompt = self.format_template(advice_prompt, vars_dict)
 
-            advice_system = persona_prompt + "\n" + advice_prompt
+            advice_system = persona_prompt + "\n" + advice_prompt if persona_prompt else advice_prompt
             advice_resp = await provider.text_chat(
                 prompt=f"为{user_info['nickname']}的今日人品值{jrrp}({fortune})给出评语和建议",
                 system_prompt=advice_system,
