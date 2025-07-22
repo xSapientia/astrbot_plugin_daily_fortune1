@@ -8,9 +8,10 @@
   "min_fortune": {
     "description": "人品值下限",
     "type": "int",
-    "default":0,
+    "default": 0,
     "hint": "每日人品值的最小值"
-  },"max_fortune": {
+  },
+  "max_fortune": {
     "description": "人品值上限",
     "type": "int",
     "default": 100,
@@ -21,16 +22,20 @@
     "type": "string",
     "default": "",
     "hint": "指定使用的大语言模型供应商ID，留空则使用默认供应商"
-  },"api_key": {
-    "description": "OpenAI兼容API密钥","type": "string",
+  },
+  "api_key": {
+    "description": "OpenAI兼容API密钥",
+    "type": "string",
     "default": "",
     "hint": "自定义API的访问密钥"
   },
   "api_url": {
-    "description": "OpenAI兼容API地址","type": "string",
+    "description": "OpenAI兼容API地址",
+    "type": "string",
     "default": "",
-    "hint": "API地址，如 https://api.openai.com/v1或 https://api.example.com/v1/chat/completions"
-  },"model_name": {
+    "hint": "API地址，如 https://api.openai.com/v1 或 https://api.example.com/v1/chat/completions"
+  },
+  "model_name": {
     "description": "模型名称",
     "type": "string",
     "default": "",
@@ -51,14 +56,15 @@
   "detection_prompt": {
     "description": "人品检测过程提示词",
     "type": "text",
-    "default": "测试今日人品的时候，显示user_id的title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字",
+    "default": "测试今日人品的时候，显示user_id的 title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字",
     "hint": "描述人品检测过程的提示词"
   },
   "suggestion_prompt": {
     "description": "建议/吐槽提示词",
     "type": "text",
     "default": "你对使用人今日人品值下的建议，字数不超过50字",
-    "hint": "针对人品值给出建议的提示词"},
+    "hint": "针对人品值给出建议的提示词"
+  },
   "rank_display_limit": {
     "description": "排行榜显示数量",
     "type": "int",
