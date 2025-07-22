@@ -4,6 +4,43 @@
     "type": "bool",
     "default": true
   },
+  "fortune_algorithm": {
+    "description": "人品值生成算法",
+    "type": "string",
+    "default": "uniform",
+    "options": ["uniform", "normal", "lucky", "unlucky", "polarized", "ladder", "golden", "sin_wave", "weighted", "custom"],
+    "hint": "选择不同的算法会产生不同的人品值分布"
+  },
+  "fortune_normal_mean": {
+    "description": "正态分布均值",
+    "type": "int",
+    "default": 60,
+    "hint": "仅在算法为normal时生效，控制人品值的中心点"
+  },
+  "fortune_normal_std": {
+    "description": "正态分布标准差",
+    "type": "int",
+    "default": 20,
+    "hint": "仅在算法为normal时生效，控制人品值的离散程度"
+  },
+  "fortune_weights": {
+    "description": "加权算法权重表",
+    "type": "object",
+    "default": {
+      "0-20": 10,
+      "21-40": 20,
+      "41-60": 40,
+      "61-80": 20,
+      "81-100": 10
+    },
+    "hint": "仅在算法为weighted时生效，定义各区间的权重"
+  },
+  "fortune_custom_expression": {
+    "description": "自定义算法表达式",
+    "type": "string",
+    "default": "random.randint(0, 100)",
+    "hint": "仅在算法为custom时生效，支持random/math/date/datetime模块"
+  },
   "detecting_message": {
     "description": "检测中提示消息",
     "type": "string",
@@ -13,26 +50,21 @@
     "description": "过程模拟提示词",
     "type": "text",
     "default": "使用{title}{card}/{nickname}或简称称呼user_id，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
-    "items": {
-       "process_template": {
-         "description": "过程模拟模板（优先级高于prompt）",
-         "type": "text",
-         "default": ""
-       }
-    }
   },
-
+  "process_template": {
+    "description": "过程模拟模板（优先级高于prompt）",
+    "type": "text",
+    "default": ""
+  },
   "advice_prompt": {
     "description": "评语提示词",
     "type": "text",
     "default": "使用{title}{card}/{nickname}或简称称呼user_id，对user_id的今日人品值给出你的评语和建议，50字以内"
-    "items": {
-       "advice_template": {
-         "description": "评语模板（优先级高于prompt）",
-         "type": "text",
-         "default": ""
-       }
-    }
+  },
+  "advice_template": {
+    "description": "评语模板（优先级高于prompt）",
+    "type": "text",
+    "default": ""
   },
   "result_cache_days": {
     "description": "结果缓存天数",
@@ -58,6 +90,12 @@
     "description": "排行榜模板",
     "type": "text",
     "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}"
+  },
+  "rank_item_template": {
+    "description": "排行榜项目模板",
+    "type": "string",
+    "default": "{medal} [{title}]{card}: {jrrp} ({fortune})",
+    "hint": "支持变量: {medal}, {title}, {card}, {nickname}, {jrrp}, {fortune}, {femoji}, {rank}"
   },
   "rank_display_count": {
     "description": "排行榜显示数量",
@@ -104,64 +142,5 @@
     "type": "string",
     "default": "",
     "hint": "留空使用默认人格"
-  },
-  "fortune_algorithm": {
-    "description": "人品值算法",
-    "type": "string",
-    "default": "normal",
-    "options": [
-      "uniform",
-      "normal",
-      "lucky_seven",
-      "time_based",
-      "fibonacci",
-      "golden_ratio",
-      "wave",
-      "constellation",
-      "karma",
-      "custom"
-    ],
-    "hint": "选择不同的算法会有不同的运势分布特征"
-  },
-
-  "fortune_algorithm_detail": {
-    "description": "算法说明",
-    "type": "text",
-    "default": "uniform: 均匀分布，完全随机\nnormal: 正态分布，大部分人在中等水平\nlucky_seven: 幸运七，7的倍数更幸运\ntime_based: 基于时间，同一时间查询结果相近\nfibonacci: 斐波那契，某些特殊数字概率更高\ngolden_ratio: 黄金分割，61.8和38.2附近概率高\nwave: 正弦波，运势周期性变化\nconstellation: 星座运势，基于出生月份\nkarma: 因果轮回，运势会反转\ncustom: 自定义权重分布",
-    "invisible": true
-  },
-
-  // Normal算法参数
-  "fortune_normal_mean": {
-    "description": "正态分布均值",
-    "type": "int",
-    "default": 60,
-    "hint": "仅在算法为normal时生效"
-  },
-
-  "fortune_normal_std": {
-    "description": "正态分布标准差",
-    "type": "int",
-    "default": 20,
-    "hint": "仅在算法为normal时生效"
-  },
-
-  "fortune_special_chance": {
-    "description": "特殊值概率(%)",
-    "type": "float",
-    "default": 1.0,
-    "hint": "获得0或100的概率"
-  },
-
-  // Custom算法参数
-  "fortune_custom_weights": {
-    "description": "自定义权重分布",
-    "type": "list",
-    "default": [],
-    "hint": "101个数字，对应0-100每个值的权重",
-    "editor_mode": true,
-    "editor_language": "json",
-    "invisible": true
-  },
-
+  }
 }
