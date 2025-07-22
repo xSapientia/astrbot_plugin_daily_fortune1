@@ -1,80 +1,68 @@
 {
-  "type": "object",
-  "properties": {
-    "enabled": {
-      "type": "boolean",
-      "title": "插件总开关",
-      "description": "是否启用今日人品功能",
-      "default": true
-    },
-    "min_value": {
-      "type": "integer",
-      "title": "人品值下限",
-      "description": "人品值的最小值",
-      "default": 0,
-      "minimum": 0
-    },
-    "max_value": {
-      "type": "integer",
-      "title": "人品值上限",
-      "description": "人品值的最大值",
-      "default": 100,
-      "minimum": 1
-    },
-    "ranking_limit": {
-      "type": "integer",
-      "title": "排行榜显示数量",
-      "description": "排行榜显示的用户数量，-1表示无限制",
-      "default":10,
-      "minimum": -1
-    },
-    "detecting_message": {
-      "type": "string",
-      "title": "检测中提示文本",
-      "description": "开始检测人品时的提示消息",
-      "default": "神秘的能量汇聚，窥见你的命运，正在祈祷中..."
-    },
-    "detection_prompt": {
-      "type": "string",
-      "title": "人品检测提示词",
-      "description": "用于LLM生成人品检测过程的提示词",
-      "default": "测试今日人品的时候，显示user_id的title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字"
-    },
-    "advice_prompt": {
-      "type": "string",
-      "title": "建议生成提示词",
-      "description": "用于LLM生成建议的提示词",
-      "default": "你对使用人今日人品值下的建议，字数不超过50字"
-    },
-    "llm_provider_id": {
-      "type": "string",
-      "title": "LLM供应商ID",
-      "description": "指定的LLM服务供应商ID，留空则使用默认",
-      "default": ""},
-    "llm_api_key": {
-      "type": "string",
-      "title": "LLM API密钥",
-      "description": "OpenAI兼容格式的API密钥",
-      "default": ""
-    },
-    "llm_api_url": {
-      "type": "string",
-      "title": "LLM API地址",
-      "description": "OpenAI兼容格式的API地址",
-      "default": ""
-    },
-    "llm_model_name": {
-      "type": "string",
-      "title": "LLM模型名称",
-      "description": "指定使用的模型名称",
-      "default": ""
-    },
-    "persona_name": {
-      "type": "string",
-      "title": "人格名称",
-      "description": "指定使用的人格情景名称",
-      "default": ""
-    }
+  "enabled": {
+    "description": "插件总开关",
+    "type": "bool",
+    "default": true,
+    "hint": "控制插件是否启用"
   },
-  "required": ["enabled"]
+  "min_fortune": {
+    "description": "人品值下限",
+    "type": "int",
+    "default":0,
+    "hint": "每日人品值的最小值"
+  },"max_fortune": {
+    "description": "人品值上限",
+    "type": "int",
+    "default": 100,
+    "hint": "每日人品值的最大值"
+  },
+  "provider_id": {
+    "description": "LLM供应商ID",
+    "type": "string",
+    "default": "",
+    "hint": "指定使用的大语言模型供应商ID，留空则使用默认供应商"
+  },"api_key": {
+    "description": "OpenAI兼容API密钥","type": "string",
+    "default": "",
+    "hint": "自定义API的访问密钥"
+  },
+  "api_url": {
+    "description": "OpenAI兼容API地址","type": "string",
+    "default": "",
+    "hint": "API地址，如 https://api.openai.com/v1或 https://api.example.com/v1/chat/completions"
+  },"model_name": {
+    "description": "模型名称",
+    "type": "string",
+    "default": "",
+    "hint": "使用的模型名称，如 gpt-3.5-turbo"
+  },
+  "persona_name": {
+    "description": "LLM人格名称",
+    "type": "string",
+    "default": "",
+    "hint": "指定使用的人格情景名称，留空则使用默认人格"
+  },
+  "detecting_message": {
+    "description": "检测中提示文本",
+    "type": "string",
+    "default": "神秘的能量汇聚，窥见你的命运，正在祈祷中...",
+    "hint": "首次检测人品时显示的提示信息"
+  },
+  "detection_prompt": {
+    "description": "人品检测过程提示词",
+    "type": "text",
+    "default": "测试今日人品的时候，显示user_id的title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字",
+    "hint": "描述人品检测过程的提示词"
+  },
+  "suggestion_prompt": {
+    "description": "建议/吐槽提示词",
+    "type": "text",
+    "default": "你对使用人今日人品值下的建议，字数不超过50字",
+    "hint": "针对人品值给出建议的提示词"},
+  "rank_display_limit": {
+    "description": "排行榜显示数量",
+    "type": "int",
+    "default": 10,
+    "hint": "排行榜最多显示的人数，-1表示无限制"
+  }
 }
