@@ -1,6 +1,5 @@
-name: astrbot_plugin_daily_fortune1
-version: 0.0.1
-author: xSapientia
-description: 今日人品检测插件 - 通过LLM模型检测用户今日运势
-dependencies:
-  - astrbot>=3.5.0
+name: "astrbot_plugin_daily_fortune1"
+description: "每日人品值检测，支持排行榜和历史查询"
+author: "xSapientia"
+version: "1.0.0"
+repo: "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
