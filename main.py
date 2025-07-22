@@ -3,7 +3,7 @@ import os
 import hashlib
 from datetime import datetime, date
 import random
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, Set
 import asyncio
 from pathlib import Path
 
@@ -14,22 +14,24 @@ import astrbot.api.message_components as Comp
 from astrbot.api.provider import ProviderRequest, LLMResponse
 
 
-@register("daily_fortune", "阿凌", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
+@register("astrbot_plugin_daily_fortune1", "xSapientia", "今日人品检测插件", "1.0.0", "https://github.com/example/astrbot_plugin_daily_fortune1")
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
 
-        # 数据存储路径 - 修改为指定路径
+        # 数据存储路径
         self.data_dir = Path("data/plugin_data/astrbot_plugin_daily_fortune")
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.fortune_file = self.data_dir / "fortune_data.json"
         self.history_file = self.data_dir / "fortune_history.json"
+        self.group_members_file = self.data_dir / "group_members.json"  # 新增：记录群成员测试记录
 
         # 加载数据
         self.fortune_data = self._load_data(self.fortune_file, {})
         self.history_data = self._load_data(self.history_file, {})
+        self.group_members_data = self._load_data(self.group_members_file, {})  # 新增：加载群成员数据
 
         logger.info("今日人品插件已加载")
 
@@ -87,6 +89,17 @@ class DailyFortunePlugin(Star):
 
         logger.info(f"Generated fortune for {user_id}: {fortune_value}")
         return fortune_value
+
+    def _update_group_member_record(self, user_id: str, group_id: str, today: str):
+        """更新群成员测试记录"""
+        if group_id:  # 只有群聊才记录
+            group_key = f"{group_id}_{today}"
+            if group_key not in self.group_members_data:
+                self.group_members_data[group_key] = []
+
+            if user_id not in self.group_members_data[group_key]:
+                self.group_members_data[group_key].append(user_id)
+                self._save_data(self.group_members_file, self.group_members_data)
 
     async def _get_llm_provider(self):
         """获取LLM供应商"""
@@ -222,6 +235,7 @@ class DailyFortunePlugin(Star):
         user_id = event.get_sender_id()
         today = date.today().strftime("%Y-%m-%d")
         user_key = f"{user_id}_{today}"
+        group_id = event.get_group_id()
 
         # 检查今日是否已检测
         if user_key in self.fortune_data:
@@ -230,6 +244,9 @@ class DailyFortunePlugin(Star):
             fortune_value = fortune_info["fortune_value"]
             fortune_desc = self._get_fortune_level_desc(fortune_value)
             user_name = event.get_sender_name()
+
+            # 如果是在群里查询，更新群成员记录
+            self._update_group_member_record(user_id, group_id, today)
 
             result = f"📌 【{user_name}】今日人品\n"
             result += f"{user_name}哥哥，今天已经查询过了哦~\n"
@@ -252,18 +269,20 @@ class DailyFortunePlugin(Star):
         # 调用LLM生成响应
         llm_response = await self._call_llm_for_fortune(event, fortune_value)
 
-        # 保存数据
+        # 保存数据 - 注意这里不再保存group_id到fortune_data中
         fortune_info = {
             "user_id": user_id,
             "user_name": event.get_sender_name(),
             "fortune_value": fortune_value,
             "fortune_desc": self._get_fortune_level_desc(fortune_value),
             "date": today,
-            "llm_response": llm_response,
-            "group_id": event.get_group_id() if event.get_group_id() else "private"
+            "llm_response": llm_response
         }
         self.fortune_data[user_key] = fortune_info
         self._save_data(self.fortune_file, self.fortune_data)
+
+        # 如果是在群里测试，更新群成员记录
+        self._update_group_member_record(user_id, group_id, today)
 
         # 保存历史记录
         if user_id not in self.history_data:
@@ -294,14 +313,27 @@ class DailyFortunePlugin(Star):
             return
 
         today = date.today().strftime("%Y-%m-%d")
+        group_key = f"{group_id}_{today}"
 
-        # 筛选今日该群的人品记录
+        # 获取今日在群里测试过的成员列表
+        tested_members = self.group_members_data.get(group_key, [])
+
+        if not tested_members:
+            yield event.plain_result("今日群内还没有人测试人品哦~")
+            return
+
+        # 获取这些成员的人品数据
         group_fortunes = []
-        for key, info in self.fortune_data.items():
-            if key.endswith(f"_{today}") and (info.get("group_id") == group_id or
-                                             (info.get("group_id") == "private" and
-                                              info.get("user_id") in await self._get_group_member_list(event, group_id))):
-                group_fortunes.append(info)
+        for user_id in tested_members:
+            user_key = f"{user_id}_{today}"
+            if user_key in self.fortune_data:
+                fortune_info = self.fortune_data[user_key]
+                group_fortunes.append({
+                    "user_id": user_id,
+                    "user_name": fortune_info["user_name"],
+                    "fortune_value": fortune_info["fortune_value"],
+                    "fortune_desc": fortune_info["fortune_desc"]
+                })
 
         if not group_fortunes:
             yield event.plain_result("今日群内还没有人测试人品哦~")
@@ -334,19 +366,6 @@ class DailyFortunePlugin(Star):
             result += f"\n... 还有{len(group_fortunes) - display_limit}人"
 
         yield event.plain_result(result)
-
-    async def _get_group_member_list(self, event: AstrMessageEvent, group_id: str) -> list:
-        """获取群成员列表"""
-        try:
-            if event.get_platform_name() == "aiocqhttp":
-                from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
-                if isinstance(event, AiocqhttpMessageEvent):
-                    client = event.bot
-                    members = await client.api.get_group_member_list(group_id=group_id)
-                    return [str(m.get('user_id')) for m in members if m.get('user_id')]
-        except:
-            pass
-        return []
 
     @filter.command("jrrphistory")
     async def jrrp_history_command(self, event: AstrMessageEvent):
@@ -441,9 +460,15 @@ class DailyFortunePlugin(Star):
         if user_id in self.history_data:
             del self.history_data[user_id]
 
+        # 从群成员记录中删除
+        for group_key, members in self.group_members_data.items():
+            if user_id in members:
+                members.remove(user_id)
+
         # 保存数据
         self._save_data(self.fortune_file, self.fortune_data)
         self._save_data(self.history_file, self.history_data)
+        self._save_data(self.group_members_file, self.group_members_data)
 
         yield event.plain_result(f"✅ {user_name} 的所有人品数据已清除")
 
@@ -462,10 +487,12 @@ class DailyFortunePlugin(Star):
         # 清空所有数据
         self.fortune_data.clear()
         self.history_data.clear()
+        self.group_members_data.clear()
 
         # 保存空数据
         self._save_data(self.fortune_file, self.fortune_data)
         self._save_data(self.history_file, self.history_data)
+        self._save_data(self.group_members_file, self.group_members_data)
 
         yield event.plain_result("✅ 所有人品数据已重置")
 
