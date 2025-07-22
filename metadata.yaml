@@ -1,5 +1,14 @@
 name: "astrbot_plugin_daily_fortune1"
-description: "每日人品值检测，支持排行榜和历史查询"
 author: "xSapientia"
-version: "0.0.1"
-repo: "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
+description: "每日人品检测，支持排行榜和历史记录查询"
+version: "1.0.0"
+repo: "https://github.com/example/astrbot_plugin_daily_fortune1"
+plugin_type: "star"
+entry: "main.py"
+requirements:
+  - "pathlib"
+tags:
+  - "娱乐"
+  - "人品"
+  - "每日"
+  - "排行榜"
