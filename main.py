@@ -15,13 +15,12 @@ from astrbot.api.provider import ProviderRequest, LLMResponse
 
 
 @register(
-    "daily_fortune", 
-    "阿凌", 
+    "astrbot_plugin_daily_fortune1", 
+    "xSapientia", 
     "今日人品检测插件", 
     "1.0.0", 
     "https://github.com/example/astrbot_plugin_daily_fortune1"
 )
-
 
 
 class DailyFortunePlugin(Star):
@@ -35,6 +34,7 @@ class DailyFortunePlugin(Star):
 
         self.fortune_file = self.data_dir / "fortune_data.json"
         self.history_file = self.data_dir / "fortune_history.json"
+
         # 加载数据
         self.fortune_data = self._load_data(self.fortune_file, {})
         self.history_data = self._load_data(self.history_file, {})
@@ -44,8 +44,10 @@ class DailyFortunePlugin(Star):
     def _load_data(self, file_path: Path, default_data: Any) -> Any:
         """加载数据文件"""
         try:
-            if file_path.exists():with open(file_path,'r', encoding='utf-8') as f:
-                    return json.load(f)except Exception as e:
+            if file_path.exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
             logger.error(f"加载数据文件失败: {e}")
         return default_data
 
@@ -63,15 +65,16 @@ class DailyFortunePlugin(Star):
             return "极其倒霉"
         elif 1 <= fortune_value <= 2:
             return "倒大霉"
-        elif 3<= fortune_value <= 10:
+        elif 3 <= fortune_value <= 10:
             return "十分不顺"
-        elif 11<= fortune_value <= 20:
+        elif 11 <= fortune_value <= 20:
             return "略微不顺"
-        elif21 <= fortune_value <=30:
+        elif 21 <= fortune_value <= 30:
             return "正常运气"
         elif 31 <= fortune_value <= 98:
             return "好运"
-        elif fortune_value == 99:return "极其好运"
+        elif fortune_value == 99:
+            return "极其好运"
         elif fortune_value == 100:
             return "万事皆允"
         else:
@@ -80,7 +83,9 @@ class DailyFortunePlugin(Star):
     def _generate_fortune_value(self, user_id: str, today: str) -> int:
         """基于用户ID和日期生成固定的人品值"""
         min_val = self.config.get("min_fortune", 0)
-        max_val = self.config.get("max_fortune", 100)# 使用用户ID和日期作为种子生成固定随机数
+        max_val = self.config.get("max_fortune", 100)
+
+        # 使用用户ID和日期作为种子生成固定随机数
         seed_string = f"{user_id}_{today}"
         hash_obj = hashlib.md5(seed_string.encode())
         hash_int = int(hash_obj.hexdigest(), 16)
@@ -109,9 +114,11 @@ class DailyFortunePlugin(Star):
 
         if api_key and api_url and model_name:
             # TODO: 这里需要根据实际情况创建自定义供应商
-            #暂时回退到默认供应商
+            # 暂时回退到默认供应商
             logger.info("检测到自定义API配置，但暂不支持动态创建供应商，使用默认供应商")
-        # 使用默认供应商return self.context.get_using_provider()
+
+        # 使用默认供应商
+        return self.context.get_using_provider()
 
     async def _get_persona_prompt(self) -> str:
         """获取人格提示词"""
@@ -132,6 +139,7 @@ class DailyFortunePlugin(Star):
             for persona in personas:
                 if persona.name == default_persona["name"]:
                     return persona.prompt
+
         return ""
 
     async def _call_llm_for_fortune(self, event: AstrMessageEvent, fortune_value: int) -> str:
@@ -150,12 +158,18 @@ class DailyFortunePlugin(Star):
             suggestion_prompt = self.config.get("suggestion_prompt",
                 "你对使用人今日人品值下的建议，字数不超过50字")
 
-            full_prompt = f"""用户{user_name}今日人品值为{fortune_value}，运势为{fortune_desc}。
+            full_prompt = f"""用户【{user_name}】今日人品值为{fortune_value}，运势为{fortune_desc}。
 
-第一部分：{detection_prompt}
-第二部分：{suggestion_prompt}
+请完成以下任务：
+1. {detection_prompt}
+2. {suggestion_prompt}
 
-请分两部分回复，第一部分描述人品检测过程和结果，第二部分给出建议。"""
+输出格式要求：
+🔮 [检测过程描述]
+
+💎 人品值：{fortune_value}
+✨ 运势：{fortune_desc}
+💬 建议：[你的建议]"""
 
             # 获取人格提示
             system_prompt = await self._get_persona_prompt()
@@ -173,11 +187,11 @@ class DailyFortunePlugin(Star):
             if response and response.completion_text:
                 return response.completion_text
             else:
-                return f"人品值：{fortune_value}，运势：{fortune_desc}"
+                return f"💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切都会好起来的。"
 
         except Exception as e:
             logger.error(f"调用LLM失败: {e}")
-            return f"人品值：{fortune_value}，运势：{fortune_desc}"
+            return f"💎 人品值：{fortune_value}\n✨ 运势：{fortune_desc}\n💬 建议：保持平常心，一切都会好起来的。"
 
     @filter.command("jrrp")
     async def jrrp_command(self, event: AstrMessageEvent):
@@ -203,7 +217,9 @@ class DailyFortunePlugin(Star):
             result += f"今日人品值: {fortune_value}\n"
             result += f"运势: {fortune_desc} 😊\n\n"
             result += "-----以下为今日运势测算场景还原-----\n"
-            result += fortune_info["llm_response"]yield event.plain_result(result)
+            result += fortune_info["llm_response"]
+
+            yield event.plain_result(result)
             return
 
         # 首次检测，先发送检测中提示
@@ -229,9 +245,12 @@ class DailyFortunePlugin(Star):
         }
         self.fortune_data[user_key] = fortune_info
         self._save_data(self.fortune_file, self.fortune_data)
+
         # 保存历史记录
         if user_id not in self.history_data:
-            self.history_data[user_id] = []self.history_data[user_id].append({
+            self.history_data[user_id] = []
+
+        self.history_data[user_id].append({
             "date": today,
             "fortune_value": fortune_value,
             "fortune_desc": self._get_fortune_level_desc(fortune_value)
@@ -244,26 +263,33 @@ class DailyFortunePlugin(Star):
         yield event.plain_result(final_result)
 
     @filter.command("jrrprank")
-    async def jrrp_rank_command(self, event: AstrMessageEvent):"""人品排行榜命令"""
+    async def jrrp_rank_command(self, event: AstrMessageEvent):
+        """人品排行榜命令"""
         if not self.config.get("enabled", True):
-            yield event.plain_result("今日人品插件已关闭")return
+            yield event.plain_result("今日人品插件已关闭")
+            return
 
         group_id = event.get_group_id()
         if not group_id:
             yield event.plain_result("此命令仅在群聊中可用")
             return
+
         today = date.today().strftime("%Y-%m-%d")
+
         # 筛选今日该群的人品记录
         group_fortunes = []
         for key, info in self.fortune_data.items():
-            if key.endswith(f"_{today}") and (info.get("group_id") == group_id or(info.get("group_id") == "private" and group_id)):
+            if key.endswith(f"_{today}") and (info.get("group_id") == group_id or
+                (info.get("group_id") == "private" and group_id)):
                 group_fortunes.append(info)
 
-        if not group_fortunes:yield event.plain_result("今日群内还没有人测试人品哦~")
+        if not group_fortunes:
+            yield event.plain_result("今日群内还没有人测试人品哦~")
             return
 
         # 按人品值排序
         group_fortunes.sort(key=lambda x: x["fortune_value"], reverse=True)
+
         # 获取显示数量限制
         display_limit = self.config.get("rank_display_limit", 10)
         if display_limit == -1:
@@ -294,7 +320,8 @@ class DailyFortunePlugin(Star):
         await self._show_history(event)
 
     async def _show_history(self, event: AstrMessageEvent):
-        """显示个人人品历史"""if not self.config.get("enabled", True):
+        """显示个人人品历史"""
+        if not self.config.get("enabled", True):
             yield event.plain_result("今日人品插件已关闭")
             return
 
@@ -311,12 +338,14 @@ class DailyFortunePlugin(Star):
         history_sorted = sorted(history, key=lambda x: x["date"], reverse=True)
 
         result = f"📚 {user_name} 的人品历史记录\n\n"
+
         # 显示最近10条记录
         for i, record in enumerate(history_sorted[:10]):
             date_str = record["date"]
             fortune_value = record["fortune_value"]
             fortune_desc = record["fortune_desc"]
             result += f"{date_str}: {fortune_value} ({fortune_desc})\n"
+
         if len(history_sorted) > 10:
             result += f"\n... 共{len(history_sorted)}条记录，仅显示最近10条"
 
@@ -340,12 +369,14 @@ class DailyFortunePlugin(Star):
 
     @filter.command("jrrpdel")
     async def jrrp_del_command(self, event: AstrMessageEvent, confirm: str = ""):
-        """删除个人数据（简化命令）"""await self._delete_user_data(event, confirm)
+        """删除个人数据（简化命令）"""
+        await self._delete_user_data(event, confirm)
 
     async def _delete_user_data(self, event: AstrMessageEvent, confirm: str):
         """删除用户数据"""
         if not self.config.get("enabled", True):
-            yield event.plain_result("今日人品插件已关闭")return
+            yield event.plain_result("今日人品插件已关闭")
+            return
 
         if confirm != "--confirm":
             yield event.plain_result("⚠️ 此操作将清除您的所有人品数据，包括历史记录\n如需确认，请使用: /jrrpdelete --confirm")
@@ -355,10 +386,13 @@ class DailyFortunePlugin(Star):
         user_name = event.get_sender_name()
 
         # 删除今日人品数据
-        today = date.today().strftime("%Y-%m-%d")keys_to_delete = []
+        today = date.today().strftime("%Y-%m-%d")
+        keys_to_delete = []
         for key in self.fortune_data.keys():
             if key.startswith(f"{user_id}_"):
-                keys_to_delete.append(key)for key in keys_to_delete:
+                keys_to_delete.append(key)
+
+        for key in keys_to_delete:
             del self.fortune_data[key]
 
         # 删除历史数据
@@ -373,21 +407,26 @@ class DailyFortunePlugin(Star):
 
     @filter.command("jrrpreset")
     @filter.permission_type(filter.PermissionType.ADMIN)
-    async def jrrp_reset_command(self, event: AstrMessageEvent, confirm: str = ""):"""重置所有数据（仅管理员可用）"""if not self.config.get("enabled", True):
+    async def jrrp_reset_command(self, event: AstrMessageEvent, confirm: str = ""):
+        """重置所有数据（仅管理员可用）"""
+        if not self.config.get("enabled", True):
             yield event.plain_result("今日人品插件已关闭")
             return
 
         if confirm != "--confirm":
             yield event.plain_result("⚠️ 此操作将清除所有用户的人品数据！\n如需确认，请使用: /jrrpreset --confirm")
             return
+
         # 清空所有数据
         self.fortune_data.clear()
         self.history_data.clear()
 
         # 保存空数据
-        self._save_data(self.fortune_file, self.fortune_data)self._save_data(self.history_file, self.history_data)
+        self._save_data(self.fortune_file, self.fortune_data)
+        self._save_data(self.history_file, self.history_data)
 
         yield event.plain_result("✅ 所有人品数据已重置")
 
     async def terminate(self):
-        """插件卸载时调用"""logger.info("今日人品插件已卸载")
+        """插件卸载时调用"""
+        logger.info("今日人品插件已卸载")
