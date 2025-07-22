@@ -62,12 +62,12 @@
   "detecting_message": {
     "description": "检测中提示消息",
     "type": "string",
-    "default": "神秘的能量汇聚，[{title}]{card}({nickname})，你的命运即将显现，正在祈祷中..."
+    "default": "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中..."
   },
   "process_prompt": {
     "description": "过程模拟提示词",
     "type": "text",
-    "default": "使用{title}{card}/{nickname}或简称称呼user_id，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
+    "default": "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内"
   },
   "process_template": {
     "description": "过程模拟模板（优先级高于prompt）",
@@ -77,7 +77,7 @@
   "advice_prompt": {
     "description": "评语提示词",
     "type": "text",
-    "default": "使用{title}{card}/{nickname}或简称称呼user_id，对user_id的今日人品值给出你的评语和建议，50字以内"
+    "default": "使用user_id的简称称呼，对user_id的今日人品值给出你的评语和建议，50字以内"
   },
   "advice_template": {
     "description": "评语模板（优先级高于prompt）",
@@ -102,7 +102,7 @@
   "query_template": {
     "description": "查询结果模板",
     "type": "text",
-    "default": "📌 今日人品\n[{title}]{card}({nickname})，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}"
+    "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}"
   },
   "rank_template": {
     "description": "排行榜模板",
@@ -112,7 +112,7 @@
   "rank_item_template": {
     "description": "排行榜项目模板",
     "type": "string",
-    "default": "{medal} [{title}]{card}: {jrrp} ({fortune})",
+    "default": "{medal} {nickname}: {jrrp} ({fortune})",
     "hint": "支持变量: {medal}, {title}, {card}, {nickname}, {jrrp}, {fortune}, {femoji}, {rank}"
   },
   "rank_display_count": {
@@ -124,7 +124,7 @@
   "history_template": {
     "description": "历史记录模板",
     "type": "text",
-    "default": "📚 {name} 的人品历史记录\n{items}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}"
+    "default": "📚 {nickname} 的人品历史记录\n{items}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}"
   },
   "history_days": {
     "description": "历史记录天数",
