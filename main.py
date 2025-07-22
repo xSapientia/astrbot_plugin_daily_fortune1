@@ -20,7 +20,7 @@ class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.context = context
-        self.config = config or {}
+        self.config = config if config else {}
 
         # 数据文件路径
         self.data_dir = os.path.join("data", "plugin_data", "astrbot_plugin_daily_fortune1")
@@ -150,6 +150,13 @@ class DailyFortunePlugin(Star):
             # 获取人格
             persona_name = self._get_config("persona_name", "")
 
+            # 获取默认人格
+            if not persona_name and hasattr(self.context, 'provider_manager'):
+                if hasattr(self.context.provider_manager, 'selected_default_persona'):
+                    default_persona = self.context.provider_manager.selected_default_persona
+                    if isinstance(default_persona, dict):
+                        persona_name = default_persona.get("name", "")
+
             # 构建请求参数
             kwargs = {
                 "prompt": prompt,
@@ -157,13 +164,12 @@ class DailyFortunePlugin(Star):
                 "contexts": []
             }
 
-            # 尝试通过不同方式设置人格
+            # 如果有人格名称，添加到系统提示中
             if persona_name:
-                # 某些provider可能支持personality参数
-                kwargs["personality"] = persona_name
+                kwargs["system_prompt"] = f"你现在是{persona_name}。"
 
             response = await provider.text_chat(**kwargs)
-            if response and response.completion_text:
+            if response and hasattr(response, 'completion_text'):
                 return response.completion_text.strip()
         except Exception as e:
             logger.error(f"LLM调用失败: {e}")
@@ -179,30 +185,33 @@ class DailyFortunePlugin(Star):
                     kwargs[key] = ""
             return template.format(**kwargs)
         except Exception as e:
-            logger.error(f"模板应用失败: {e}, template: {template}, kwargs: {kwargs}")
+            logger.error(f"模板应用失败: {e}")
             return template
 
     async def _clean_old_cache(self):
         """清理过期缓存"""
-        cache_days = self._get_config("cache_days", 7)
-        today = date.today()
+        try:
+            cache_days = self._get_config("cache_days", 7)
+            today = date.today()
 
-        fortunes = await self._load_json(self.fortune_file)
-        keys_to_delete = []
+            fortunes = await self._load_json(self.fortune_file)
+            keys_to_delete = []
 
-        for date_key in fortunes.keys():
-            try:
-                fortune_date = datetime.strptime(date_key, "%Y-%m-%d").date()
-                if (today - fortune_date).days > cache_days:
-                    keys_to_delete.append(date_key)
-            except:
-                pass
+            for date_key in fortunes.keys():
+                try:
+                    fortune_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+                    if (today - fortune_date).days > cache_days:
+                        keys_to_delete.append(date_key)
+                except:
+                    pass
 
-        for key in keys_to_delete:
-            del fortunes[key]
+            for key in keys_to_delete:
+                del fortunes[key]
 
-        if keys_to_delete:
-            await self._save_json(self.fortune_file, fortunes)
+            if keys_to_delete:
+                await self._save_json(self.fortune_file, fortunes)
+        except Exception as e:
+            logger.error(f"清理缓存失败: {e}")
 
     @filter.command("jrrp")
     async def daily_fortune(self, event: AstrMessageEvent):
@@ -399,7 +408,6 @@ class DailyFortunePlugin(Star):
 
             # 获取目标用户
             target_id = event.get_sender_id()
-            # TODO: 后续支持@查询他人记录
 
             history = await self._load_json(self.history_file)
 
@@ -419,9 +427,9 @@ class DailyFortunePlugin(Star):
 
             # 计算统计
             all_values = [r["value"] for r in user_history]
-            avg_jrrp = sum(all_values) / len(all_values)
-            max_jrrp = max(all_values)
-            min_jrrp = min(all_values)
+            avg_jrrp = sum(all_values) / len(all_values) if all_values else 0
+            max_jrrp = max(all_values) if all_values else 0
+            min_jrrp = min(all_values) if all_values else 0
 
             # 获取用户名
             user_info = await self._get_enhanced_user_info(event)
