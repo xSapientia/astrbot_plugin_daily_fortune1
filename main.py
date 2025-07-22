@@ -10,6 +10,7 @@ from typing import Dict, List, Optional, Tuple, Any
 import aiofiles
 import asyncio
 import re
+import math
 
 # 全局锁
 _fortune_lock = asyncio.Lock()
@@ -18,7 +19,7 @@ _fortune_lock = asyncio.Lock()
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "今日人品测试插件 - 完全重构版",
-    "0.0.1",
+    "0.0.2",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1",
 )
 class DailyFortunePlugin(Star):
@@ -48,7 +49,7 @@ class DailyFortunePlugin(Star):
             (100, 100, "神吉", "🌟")
         ]
 
-        logger.info("今日人品插件 v0.0.1 加载成功！")
+        logger.info("今日人品插件 v0.0.2 加载成功！")
 
     def _get_config(self, key: str, default: Any = None) -> Any:
         """获取配置值"""
@@ -82,6 +83,100 @@ class DailyFortunePlugin(Star):
             if min_val <= jrrp <= max_val:
                 return fortune, emoji
         return "吉", "😊"
+
+    def _get_fortune_value(self) -> int:
+        """根据配置的算法获取人品值"""
+        algorithm = self._get_config("fortune_algorithm", "uniform")
+
+        if algorithm == "uniform":
+            # 均匀分布
+            return random.randint(0, 100)
+
+        elif algorithm == "normal":
+            # 正态分布
+            mean = self._get_config("fortune_normal_mean", 60)
+            std = self._get_config("fortune_normal_std", 20)
+            value = random.gauss(mean, std)
+            return max(0, min(100, int(value)))
+
+        elif algorithm == "lucky":
+            # 幸运算法 - 偏向高分
+            base = random.randint(40, 100)
+            if random.random() < 0.3:  # 30%概率加成
+                base = min(100, base + random.randint(10, 30))
+            return base
+
+        elif algorithm == "unlucky":
+            # 厄运算法 - 偏向低分
+            base = random.randint(0, 60)
+            if random.random() < 0.3:  # 30%概率减成
+                base = max(0, base - random.randint(10, 30))
+            return base
+
+        elif algorithm == "polarized":
+            # 极化算法 - 两极分化
+            if random.random() < 0.5:
+                return random.randint(0, 30)
+            else:
+                return random.randint(70, 100)
+
+        elif algorithm == "ladder":
+            # 阶梯算法 - 固定几个值
+            values = [0, 25, 50, 75, 100]
+            return random.choice(values)
+
+        elif algorithm == "golden":
+            # 黄金分割算法
+            if random.random() < 0.618:
+                return random.randint(38, 62)  # 黄金分割点附近
+            else:
+                return random.randint(0, 100)
+
+        elif algorithm == "sin_wave":
+            # 正弦波算法 - 根据日期
+            day_of_year = date.today().timetuple().tm_yday
+            base = int(50 + 30 * math.sin(day_of_year * math.pi / 180))
+            noise = random.randint(-10, 10)
+            return max(0, min(100, base + noise))
+
+        elif algorithm == "weighted":
+            # 加权算法 - 根据权重表
+            weights = self._get_config("fortune_weights", {
+                "0-20": 10,
+                "21-40": 20,
+                "41-60": 40,
+                "61-80": 20,
+                "81-100": 10
+            })
+
+            # 构建权重列表
+            choices = []
+            for range_str, weight in weights.items():
+                start, end = map(int, range_str.split('-'))
+                choices.extend(range(start, end + 1) for _ in range(weight))
+
+            # 展平列表并随机选择
+            flat_choices = [val for sublist in choices for val in sublist]
+            return random.choice(flat_choices) if flat_choices else random.randint(0, 100)
+
+        elif algorithm == "custom":
+            # 自定义算法 - 使用配置的表达式
+            expression = self._get_config("fortune_custom_expression", "random.randint(0, 100)")
+            try:
+                # 安全地评估表达式
+                allowed_names = {
+                    'random': random,
+                    'math': math,
+                    'date': date,
+                    'datetime': datetime
+                }
+                return max(0, min(100, int(eval(expression, {"__builtins__": {}}, allowed_names))))
+            except:
+                return random.randint(0, 100)
+
+        else:
+            # 默认使用均匀分布
+            return random.randint(0, 100)
 
     async def _get_user_info(self, event: AstrMessageEvent) -> Dict[str, str]:
         """获取用户信息"""
@@ -285,8 +380,8 @@ class DailyFortunePlugin(Star):
                 })
                 yield event.plain_result(detecting_msg)
 
-                # 生成人品值
-                jrrp = random.randint(0, 100)
+                # 使用配置的算法生成人品值
+                jrrp = self._get_fortune_value()
                 fortune, femoji = self._get_fortune_info(jrrp)
 
                 # 使用LLM生成文本
@@ -380,9 +475,12 @@ class DailyFortunePlugin(Star):
                 # 排序
                 sorted_fortunes = sorted(group_fortunes, key=lambda x: x[1]["jrrp"], reverse=True)
 
-                # 使用排行模板
+                # 获取排行模板和项目模板
                 rank_template = self._get_config("rank_template",
                     "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}")
+
+                rank_item_template = self._get_config("rank_item_template",
+                    "{medal} [{title}]{card}: {jrrp} ({fortune})")
 
                 ranks = []
                 medals = ["🥇", "🥈", "🥉"]
@@ -394,7 +492,19 @@ class DailyFortunePlugin(Star):
                     medal = medals[idx] if idx < 3 else f"{idx+1}."
                     user_info = data.get("user_info", {})
 
-                    rank_item = f"{medal} [{user_info.get('title', '')}]{user_info.get('card', '未知')}: {data['jrrp']} ({data['fortune']})"
+                    # 使用模板生成每一行
+                    rank_vars = {
+                        'medal': medal,
+                        'title': user_info.get('title', ''),
+                        'card': user_info.get('card', '未知'),
+                        'nickname': user_info.get('nickname', '未知'),
+                        'jrrp': data['jrrp'],
+                        'fortune': data['fortune'],
+                        'femoji': data.get('femoji', ''),
+                        'rank': idx + 1
+                    }
+
+                    rank_item = self._replace_variables(rank_item_template, rank_vars)
                     ranks.append(rank_item)
 
                 result = rank_template.replace("{date}", today).replace("{ranks}", "\n".join(ranks))
