@@ -1,617 +1,472 @@
 import json
-import random
 import asyncio
-import os
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Any
-from collections import defaultdict
-
+import random
+import hashlib
+from datetime import datetime, date
+from pathlib import Path
+from typing import Optional, Dict, Any, List
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
-from astrbot.api.provider import Provider, ProviderMetadata
+from astrbot.api.provider import BaseProvider
 
 
 @register(
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
-    "每日人品值查询插件，提供运势测算、排行榜、历史记录等功能",
+    "每日人品值和运势查询插件，支持排行榜和历史记录",
     "0.0.1",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig = None):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
+        self.config = config
+        self.data_dir = Path("data/plugin_data/astrbot_plugin_daily_fortune1")
+        self.data_dir.mkdir(parents=True, exist_ok=True)
 
-        # 直接使用硬编码的插件名，完全避免依赖metadata
-        plugin_name = "astrbot_plugin_daily_fortune1"
-
-        # 处理配置
-        if config is None:
-            config_path = f"data/config/{plugin_name}_config.json"
-            if os.path.exists(config_path):
-                try:
-                    with open(config_path, 'r', encoding='utf-8') as f:
-                        config = json.load(f)
-                except Exception as e:
-                    logger.error(f"加载配置文件失败: {e}")
-                    config = {}
-            else:
-                config = {}
-
-        self.config = config if isinstance(config, dict) else dict(config)
-        self.data_dir = f"data/plugin_data/{plugin_name}"
-        self.ensure_data_dir()
+        # 数据文件路径
+        self.fortune_file = self.data_dir / "daily_fortune.json"
+        self.history_file = self.data_dir / "fortune_history.json"
 
         # 加载数据
-        self.fortune_data = self.load_data("fortune_data.json") or {}
-        self.history_data = self.load_data("history_data.json") or {}
+        self.daily_data = self._load_data(self.fortune_file)
+        self.history_data = self._load_data(self.history_file)
 
-        # 运势等级定义
-        self.fortune_levels = [
-            ("大凶", 0, 10),
-            ("凶", 11, 30),
-            ("小凶", 31, 50),
-            ("平", 51, 70),
-            ("小吉", 71, 85),
-            ("吉", 86, 95),
-            ("大吉", 96, 100)
-        ]
-
-        # 表情映射
-        self.fortune_emojis = {
-            "大凶": "😱",
-            "凶": "😰",
-            "小凶": "😟",
-            "平": "😐",
-            "小吉": "😊",
-            "吉": "😄",
-            "大吉": "🎉"
+        # 运势等级映射
+        self.fortune_levels = {
+            (0, 1): ("极凶", "💀"),
+            (2, 10): ("大凶", "😨"),
+            (11, 20): ("凶", "😰"),
+            (21, 30): ("小凶", "🫨"),
+            (31, 40): ("平", "😐"),
+            (41, 60): ("小吉", "🙂"),
+            (61, 80): ("吉", "😊"),
+            (81, 98): ("大吉", "😉"),
+            (99, 100): ("天和", "😇")
         }
 
-        # 初始化自定义LLM provider（如果配置了）
-        self.custom_provider = None
-        self._init_custom_provider()
+        # 初始化LLM提供商
+        self._init_provider()
 
-        logger.info("DailyFortunePlugin 初始化完成")
+        logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
-    def _init_custom_provider(self):
-        """初始化自定义的LLM provider"""
-        llm_config = self.config.get("llm", {})
-        if not isinstance(llm_config, dict):
-            return
+    def _init_provider(self):
+        """初始化LLM提供商"""
+        provider_id = self.config.get("llm_provider_id", "")
 
-        # 如果配置了provider_id，则不需要创建自定义provider
-        if llm_config.get("provider_id"):
-            return
-
-        # 检查是否配置了API信息
-        api_key = llm_config.get("api_key")
-        api_url = llm_config.get("api_url")
-        model = llm_config.get("model", "gpt-3.5-turbo")
-
-        if api_key and api_url:
+        if provider_id:
+            # 使用指定的provider_id
             try:
-                # 标准化API URL
-                api_url = self._normalize_api_url(api_url)
-
-                # 创建自定义provider
-                from astrbot.core.provider.openai_compatible import OpenAICompatibleProvider
-
-                # 创建metadata
-                metadata = ProviderMetadata(
-                    id="daily_fortune_custom_llm",
-                    name="Daily Fortune Custom LLM",
-                    type="llm"
-                )
-
-                # 创建配置
-                custom_config = {
-                    "api_key": api_key,
-                    "api_base": api_url,
-                    "model": [model]
-                }
-
-                # 实例化provider
-                self.custom_provider = OpenAICompatibleProvider(custom_config, metadata)
-                logger.info(f"创建自定义LLM provider成功: {api_url}")
-
+                self.provider = self.context.get_provider_by_id(provider_id)
+                if self.provider:
+                    logger.info(f"使用provider_id: {provider_id} 连接成功")
+                else:
+                    logger.warning(f"未找到provider_id: {provider_id}，将使用默认提供商")
+                    self.provider = None
             except Exception as e:
-                logger.error(f"创建自定义LLM provider失败: {e}")
-                self.custom_provider = None
+                logger.error(f"获取provider失败: {e}")
+                self.provider = None
+        else:
+            # 使用第三方接口配置
+            api_config = self.config.get("llm_api", {})
+            if api_config.get("api_key") and api_config.get("url"):
+                logger.info(f"使用第三方接口: {api_config['url']}")
+                # 这里需要根据实际情况创建provider
+                self.provider = None
+            else:
+                self.provider = None
 
-    def _normalize_api_url(self, url: str) -> str:
-        """标准化API URL"""
-        # 移除末尾的斜杠
-        url = url.rstrip('/')
+        # 获取人格配置
+        self.persona_name = self.config.get("persona_name", "")
+        if self.persona_name:
+            personas = self.context.provider_manager.personas
+            found = False
+            for p in personas:
+                if p.get('name') == self.persona_name:
+                    prompt = p.get('prompt', '')
+                    logger.info(f"使用人格: {self.persona_name}, prompt前20字符: {prompt[:20]}...")
+                    found = True
+                    break
+            if not found:
+                logger.warning(f"未找到人格: {self.persona_name}")
 
-        # 如果已经包含了完整路径，移除它
-        if url.endswith('/chat/completions'):
-            url = url[:-len('/chat/completions')]
-        elif url.endswith('/v1/chat/completions'):
-            url = url[:-len('/v1/chat/completions')]
-
-        # 如果没有/v1结尾，添加它
-        if not url.endswith('/v1'):
-            url = url + '/v1'
-
-        return url
-
-    def ensure_data_dir(self):
-        """确保数据目录存在"""
-        os.makedirs(self.data_dir, exist_ok=True)
-
-    def load_data(self, filename: str) -> Optional[Dict]:
-        """加载数据文件"""
-        filepath = os.path.join(self.data_dir, filename)
-        if os.path.exists(filepath):
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    return json.load(f)
-            except Exception as e:
-                logger.error(f"加载数据文件 {filename} 失败: {e}")
-        return None
-
-    def save_data(self, data: Dict, filename: str):
-        """保存数据文件"""
-        filepath = os.path.join(self.data_dir, filename)
+    def _load_data(self, file_path: Path) -> Dict:
+        """加载JSON数据"""
         try:
-            with open(filepath, 'w', encoding='utf-8') as f:
+            if file_path.exists():
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.error(f"加载数据文件失败: {e}")
+        return {}
+
+    def _save_data(self, data: Dict, file_path: Path):
+        """保存JSON数据"""
+        try:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
         except Exception as e:
-            logger.error(f"保存数据文件 {filename} 失败: {e}")
+            logger.error(f"保存数据文件失败: {e}")
 
-    def get_today_key(self) -> str:
-        """获取今天的日期键"""
-        return datetime.now().strftime("%Y-%m-%d")
+    def _get_today_key(self) -> str:
+        """获取今日日期作为key"""
+        return date.today().strftime("%Y-%m-%d")
 
-    def get_fortune_level(self, jrrp: int) -> Tuple[str, str]:
-        """根据人品值获取运势等级和表情"""
-        for level, min_val, max_val in self.fortune_levels:
-            if min_val <= jrrp <= max_val:
-                return level, self.fortune_emojis[level]
-        return "平", "😐"
-
-    async def get_user_info(self, event: AstrMessageEvent) -> Dict[str, str]:
-        """从rawmessage_viewer1插件获取用户增强信息"""
-        user_info = {
-            "nickname": event.get_sender_name() or "未知",
-            "card": "",
-            "title": ""
-        }
-
-        try:
-            # 尝试从event中获取增强信息
-            message_id = event.message_obj.message_id
-
-            # 查找rawmessage_viewer1插件
-            raw_viewer = None
-            for star_meta in self.context.get_all_stars():
-                if star_meta.name == "astrbot_plugin_rawmessage_viewer1":
-                    raw_viewer = star_meta.instance
-                    break
-
-            if raw_viewer and hasattr(raw_viewer, 'enhanced_messages'):
-                if message_id in raw_viewer.enhanced_messages:
-                    enhanced_msg = raw_viewer.enhanced_messages[message_id]
-                    sender = enhanced_msg.get("sender", {})
-                    user_info["card"] = sender.get("card", "") or sender.get("nickname", "")
-                    user_info["title"] = sender.get("title", "")
-        except Exception as e:
-            logger.debug(f"获取增强用户信息失败: {e}")
-
-        return user_info
-
-    def calculate_jrrp(self, user_id: str, date: str) -> int:
-        """计算人品值"""
+    def _calculate_jrrp(self, user_id: str) -> int:
+        """计算今日人品值"""
         algorithm = self.config.get("jrrp_algorithm", "hash")
+        today = self._get_today_key()
 
         if algorithm == "hash":
-            # 基于哈希的算法
-            seed = f"{user_id}_{date}"
-            hash_value = hash(seed)
-            return abs(hash_value) % 101
+            # 基于用户ID和日期的哈希算法
+            seed = f"{user_id}_{today}"
+            hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
+            return hash_value % 101
         elif algorithm == "random":
-            # 真随机算法
+            # 纯随机算法
+            random.seed(f"{user_id}_{today}")
             return random.randint(0, 100)
         else:
             # 默认算法
-            seed = f"{user_id}_{date}"
-            random.seed(seed)
-            result = random.randint(0, 100)
-            random.seed()  # 重置随机种子
-            return result
+            return random.randint(0, 100)
 
-    async def _get_llm_provider(self) -> Optional[Provider]:
-        """获取LLM provider（优先使用配置的）"""
-        llm_config = self.config.get("llm", {})
+    def _get_fortune_info(self, jrrp: int) -> tuple:
+        """根据人品值获取运势信息"""
+        for (min_val, max_val), (fortune, emoji) in self.fortune_levels.items():
+            if min_val <= jrrp <= max_val:
+                return fortune, emoji
+        return "未知", "❓"
 
-        # 1. 优先使用provider_id
-        if isinstance(llm_config, dict) and llm_config.get("provider_id"):
-            provider = self.context.get_provider_by_id(llm_config["provider_id"])
-            if provider:
-                return provider
+    async def _get_user_info(self, event: AstrMessageEvent) -> Dict[str, str]:
+        """获取用户信息（从rawmessage_viewer1插件）"""
+        user_id = event.get_sender_id()
+        nickname = event.get_sender_name()
+        card = nickname  # 默认值
+        title = "无"  # 默认值
 
-        # 2. 使用自定义provider
-        if self.custom_provider:
-            return self.custom_provider
-
-        # 3. 使用默认provider
-        return self.context.get_using_provider()
-
-    async def generate_process_and_advice(self, event: AstrMessageEvent, user_info: Dict, jrrp: int, fortune: str) -> Tuple[str, str]:
-        """通过LLM生成过程模拟和评语"""
+        # 尝试从rawmessage_viewer1插件获取增强信息
         try:
-            # 获取provider
-            provider = await self._get_llm_provider()
+            if event.get_platform_name() == "aiocqhttp":
+                message_id = event.message_obj.message_id
 
-            if not provider:
-                return "水晶球闪烁着神秘的光芒...", "愿好运常伴你左右"
-
-            # 获取人格
-            llm_config = self.config.get("llm", {})
-            persona_name = llm_config.get("persona_name") if isinstance(llm_config, dict) else None
-            persona_prompt = ""
-
-            if persona_name:
-                all_personas = self.context.provider_manager.personas
-                persona = next((p for p in all_personas if p.get('name') == persona_name), None)
-                if persona:
-                    persona_prompt = persona.get('prompt', '')
-            else:
-                # 使用默认人格
-                try:
-                    default_persona = self.context.provider_manager.selected_default_persona
-                    if default_persona and isinstance(default_persona, dict):
-                        default_persona_name = default_persona.get("name")
-                        if default_persona_name:
-                            all_personas = self.context.provider_manager.personas
-                            persona = next((p for p in all_personas if p.get('name') == default_persona_name), None)
-                            if persona:
-                                persona_prompt = persona.get('prompt', '')
-                except:
-                    pass
-
-            # 准备变量
-            vars_dict = {
-                "nickname": user_info["nickname"],
-                "card": user_info["card"],
-                "title": user_info["title"],
-                "jrrp": str(jrrp),
-                "fortune": fortune
-            }
-
-            # 过程模拟
-            process_prompt = self.config.get("process_prompt", "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
-            process_prompt = self.format_template(process_prompt, vars_dict)
-
-            process_system = persona_prompt + "\n" + process_prompt if persona_prompt else process_prompt
-            process_resp = await provider.text_chat(
-                prompt=f"为{user_info['nickname']}生成今日人品值{jrrp}的占卜过程描述",
-                system_prompt=process_system,
-                contexts=[]
-            )
-            process = process_resp.completion_text.strip()
-
-            # 评语建议
-            advice_prompt = self.config.get("advice_prompt", "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
-            advice_prompt = self.format_template(advice_prompt, vars_dict)
-
-            advice_system = persona_prompt + "\n" + advice_prompt if persona_prompt else advice_prompt
-            advice_resp = await provider.text_chat(
-                prompt=f"为{user_info['nickname']}的今日人品值{jrrp}({fortune})给出评语和建议",
-                system_prompt=advice_system,
-                contexts=[]
-            )
-            advice = advice_resp.completion_text.strip()
-
-            return process, advice
-
+                # 查找rawmessage_viewer1插件
+                plugins = self.context.get_all_stars()
+                for plugin_meta in plugins:
+                    if plugin_meta.metadata.name == "astrbot_plugin_rawmessage_viewer1":
+                        plugin_instance = plugin_meta.instance
+                        if hasattr(plugin_instance, 'enhanced_messages'):
+                            enhanced_msg = plugin_instance.enhanced_messages.get(message_id, {})
+                            sender = enhanced_msg.get("sender", {})
+                            nickname = sender.get("nickname", nickname)
+                            card = sender.get("card", nickname)
+                            title = sender.get("title", "无")
+                            break
         except Exception as e:
-            logger.error(f"生成过程和建议失败: {e}")
-            return "水晶球闪烁着神秘的光芒...", "愿好运常伴你左右"
+            logger.debug(f"获取增强用户信息失败: {e}")
 
-    def format_template(self, template: str, vars_dict: Dict[str, str]) -> str:
-        """格式化模板"""
-        for key, value in vars_dict.items():
-            template = template.replace(f"{{{key}}}", str(value))
-        return template
+        return {
+            "user_id": user_id,
+            "nickname": nickname,
+            "card": card,
+            "title": title
+        }
+
+    async def _generate_with_llm(self, prompt: str, system_prompt: str = "") -> str:
+        """使用LLM生成内容"""
+        try:
+            provider = self.provider or self.context.get_using_provider()
+            if not provider:
+                return "LLM服务暂时不可用"
+
+            # 获取当前会话的人格信息
+            contexts = []
+            if self.persona_name:
+                # 使用指定的人格
+                personas = self.context.provider_manager.personas
+                for p in personas:
+                    if p.get('name') == self.persona_name:
+                        system_prompt = p.get('prompt', '') + "\n" + system_prompt
+                        break
+
+            response = await provider.text_chat(
+                prompt=prompt,
+                contexts=contexts,
+                system_prompt=system_prompt
+            )
+
+            return response.completion_text
+        except Exception as e:
+            logger.error(f"LLM生成失败: {e}")
+            return "生成失败"
 
     @filter.command("jrrp")
-    async def jrrp_command(self, event: AstrMessageEvent):
+    async def jrrp(self, event: AstrMessageEvent):
         """今日人品查询"""
-        user_id = event.get_sender_id()
-        today = self.get_today_key()
-        user_info = await self.get_user_info(event)
+        user_info = await self._get_user_info(event)
+        user_id = user_info["user_id"]
+        nickname = user_info["nickname"]
+        today = self._get_today_key()
+
+        # 初始化今日数据
+        if today not in self.daily_data:
+            self.daily_data[today] = {}
 
         # 检查是否已经查询过
-        if today not in self.fortune_data:
-            self.fortune_data[today] = {}
-
-        if user_id in self.fortune_data[today]:
-            # 已查询过，返回缓存结果
-            cached = self.fortune_data[today][user_id]
+        if user_id in self.daily_data[today]:
+            # 已查询，返回缓存结果
+            cached = self.daily_data[today][user_id]
             jrrp = cached["jrrp"]
-            fortune = cached["fortune"]
-            femoji = cached["femoji"]
+            fortune, femoji = self._get_fortune_info(jrrp)
 
-            query_template = self.config.get("query_template",
+            # 构建查询模板
+            query_template = self.config.get("templates", {}).get("query",
                 "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
 
-            vars_dict = {
-                "nickname": user_info["nickname"],
-                "card": user_info["card"],
-                "title": user_info["title"],
-                "jrrp": str(jrrp),
-                "fortune": fortune,
-                "femoji": femoji
-            }
+            result = query_template.format(
+                nickname=nickname,
+                jrrp=jrrp,
+                fortune=fortune,
+                femoji=femoji
+            )
 
-            result = self.format_template(query_template, vars_dict)
-
-            # 如果配置了显示缓存结果
-            if self.config.get("show_cached_result", False) and "result" in cached:
+            # 如果配置启用了显示缓存结果
+            if self.config.get("show_cached_result", True) and "result" in cached:
                 result += f"\n\n-----以下为今日运势测算场景还原-----\n{cached['result']}"
 
             yield event.plain_result(result)
             return
 
-        # 首次查询
-        # 发送检测中消息
+        # 首次查询，显示检测中消息
         detecting_msg = self.config.get("detecting_message",
             "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...")
-        detecting_msg = self.format_template(detecting_msg, {"nickname": user_info["nickname"]})
-        yield event.plain_result(detecting_msg)
+        yield event.plain_result(detecting_msg.format(nickname=nickname))
 
         # 计算人品值
-        jrrp = self.calculate_jrrp(user_id, today)
-        fortune, femoji = self.get_fortune_level(jrrp)
+        jrrp = self._calculate_jrrp(user_id)
+        fortune, femoji = self._get_fortune_info(jrrp)
 
-        # 生成过程和建议
-        process, advice = await self.generate_process_and_advice(event, user_info, jrrp, fortune)
-
-        # 格式化结果
-        result_template = self.config.get("result_template",
-            "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
-
+        # 准备LLM生成的变量
         vars_dict = {
-            "nickname": user_info["nickname"],
+            "nickname": nickname,
             "card": user_info["card"],
             "title": user_info["title"],
-            "jrrp": str(jrrp),
-            "fortune": fortune,
-            "femoji": femoji,
-            "process": process,
-            "advice": advice
-        }
-
-        result = self.format_template(result_template, vars_dict)
-
-        # 缓存结果
-        cache_days = self.config.get("cache_days", 1)
-        self.fortune_data[today][user_id] = {
-            "nickname": user_info["nickname"],
             "jrrp": jrrp,
             "fortune": fortune,
-            "femoji": femoji,
+            "femoji": femoji
+        }
+
+        # 生成过程模拟
+        process_prompt = self.config.get("prompts", {}).get("process",
+            "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
+        process_prompt = process_prompt.format(**vars_dict)
+        process = await self._generate_with_llm(process_prompt)
+
+        # 生成建议
+        advice_prompt = self.config.get("prompts", {}).get("advice",
+            "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
+        advice_prompt = advice_prompt.format(**vars_dict)
+        advice = await self._generate_with_llm(advice_prompt)
+
+        # 构建结果
+        result_template = self.config.get("templates", {}).get("random",
+            "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}。")
+
+        result = result_template.format(
+            process=process,
+            jrrp=jrrp,
+            fortune=fortune,
+            advice=advice
+        )
+
+        # 缓存结果
+        self.daily_data[today][user_id] = {
+            "jrrp": jrrp,
+            "fortune": fortune,
             "process": process,
             "advice": advice,
             "result": result,
-            "expire": (datetime.now() + timedelta(days=cache_days)).isoformat()
+            "nickname": nickname,
+            "timestamp": datetime.now().isoformat()
         }
+        self._save_data(self.daily_data, self.fortune_file)
 
-        # 保存到历史记录
+        # 更新历史记录
         if user_id not in self.history_data:
             self.history_data[user_id] = {}
         self.history_data[user_id][today] = {
             "jrrp": jrrp,
             "fortune": fortune
         }
-
-        # 清理过期数据
-        self.clean_expired_data()
-
-        # 保存数据
-        self.save_data(self.fortune_data, "fortune_data.json")
-        self.save_data(self.history_data, "history_data.json")
+        self._save_data(self.history_data, self.history_file)
 
         yield event.plain_result(result)
 
     @filter.command("jrrprank")
-    async def jrrp_rank_command(self, event: AstrMessageEvent):
-        """群内人品排行榜"""
+    async def jrrprank(self, event: AstrMessageEvent):
+        """群内今日人品排行榜"""
         if event.is_private_chat():
-            yield event.plain_result("排行榜功能仅在群聊中可用哦~")
+            yield event.plain_result("排行榜功能仅在群聊中可用")
             return
 
-        today = self.get_today_key()
-        if today not in self.fortune_data:
+        today = self._get_today_key()
+
+        if today not in self.daily_data:
             yield event.plain_result("今天还没有人查询过人品值呢~")
             return
 
-        # 获取群内所有查询过的用户
-        group_users = []
-        for user_id, data in self.fortune_data[today].items():
-            group_users.append({
+        # 获取群成员的人品值
+        group_data = []
+        for user_id, data in self.daily_data[today].items():
+            group_data.append({
                 "user_id": user_id,
-                "nickname": data.get("nickname", user_id),
+                "nickname": data.get("nickname", "未知"),
                 "jrrp": data["jrrp"],
-                "fortune": data["fortune"]
+                "fortune": data.get("fortune", "未知")
             })
-
-        if not group_users:
-            yield event.plain_result("今天还没有人查询过人品值呢~")
-            return
 
         # 排序
-        group_users.sort(key=lambda x: x["jrrp"], reverse=True)
+        group_data.sort(key=lambda x: x["jrrp"], reverse=True)
 
-        # 生成排名内容
-        ranks_lines = []
-        medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
-
-        rank_item_template = self.config.get("rank_item_template",
+        # 构建排行榜
+        rank_template = self.config.get("templates", {}).get("rank",
             "{medal} {nickname}: {jrrp} ({fortune})")
 
-        for i, user in enumerate(group_users[:10]):  # 只显示前10名
+        ranks = []
+        medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
+
+        for i, user in enumerate(group_data[:10]):  # 只显示前10名
             medal = medals[i] if i < len(medals) else "🏅"
-            line = self.format_template(rank_item_template, {
-                "medal": medal,
-                "nickname": user["nickname"],
-                "jrrp": str(user["jrrp"]),
-                "fortune": user["fortune"]
-            })
-            ranks_lines.append(line)
+            rank_line = rank_template.format(
+                medal=medal,
+                nickname=user["nickname"],
+                jrrp=user["jrrp"],
+                fortune=user["fortune"]
+            )
+            ranks.append(rank_line)
 
-        ranks = "\n".join(ranks_lines)
-
-        # 格式化排行榜
-        rank_template = self.config.get("rank_template",
+        # 构建完整排行榜
+        board_template = self.config.get("templates", {}).get("board",
             "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}")
 
-        result = self.format_template(rank_template, {
-            "date": today,
-            "ranks": ranks
-        })
+        result = board_template.format(
+            date=today,
+            ranks="\n".join(ranks)
+        )
 
         yield event.plain_result(result)
 
     @filter.command("jrrphistory", alias={"jrrphi"})
-    async def jrrp_history_command(self, event: AstrMessageEvent):
+    async def jrrphistory(self, event: AstrMessageEvent):
         """查看人品历史记录"""
-        target_id = event.get_sender_id()
-        target_name = event.get_sender_name()
+        # 检查是否有@某人
+        target_user_id = event.get_sender_id()
+        target_nickname = event.get_sender_name()
 
-        # 检查是否有@其他人
-        for msg in event.message_obj.message:
-            if isinstance(msg, Comp.At):
-                target_id = str(msg.qq)
-                target_name = f"用户{target_id}"
+        # 检查消息中是否有At
+        for comp in event.message_obj.message:
+            if isinstance(comp, Comp.At):
+                target_user_id = str(comp.qq)
+                # 尝试获取被@用户的昵称
+                target_nickname = f"用户{target_user_id}"
                 break
 
-        if target_id not in self.history_data:
-            yield event.plain_result(f"{target_name} 还没有人品记录哦~")
+        if target_user_id not in self.history_data:
+            yield event.plain_result(f"{target_nickname} 还没有任何人品记录呢~")
             return
 
+        # 获取历史天数配置
         history_days = self.config.get("history_days", 30)
-        cutoff_date = datetime.now() - timedelta(days=history_days)
+        user_history = self.history_data[target_user_id]
 
-        # 收集历史数据
-        history_items = []
-        jrrp_values = []
+        # 按日期排序并限制天数
+        sorted_dates = sorted(user_history.keys(), reverse=True)[:history_days]
 
-        for date_str, data in self.history_data[target_id].items():
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d")
-                if date >= cutoff_date:
-                    history_items.append((date_str, data))
-                    jrrp_values.append(data["jrrp"])
-            except:
-                continue
-
-        if not history_items:
-            yield event.plain_result(f"{target_name} 最近{history_days}天没有人品记录~")
+        if not sorted_dates:
+            yield event.plain_result(f"{target_nickname} 还没有任何人品记录呢~")
             return
-
-        # 排序
-        history_items.sort(key=lambda x: x[0], reverse=True)
 
         # 计算统计数据
-        avg_jrrp = sum(jrrp_values) / len(jrrp_values)
+        jrrp_values = [user_history[date]["jrrp"] for date in sorted_dates]
+        avg_jrrp = round(sum(jrrp_values) / len(jrrp_values), 1)
         max_jrrp = max(jrrp_values)
         min_jrrp = min(jrrp_values)
 
-        # 生成历史记录内容
+        # 构建历史记录列表
         history_lines = []
-        for date_str, data in history_items[:10]:  # 只显示最近10条
-            history_lines.append(f"{date_str}: {data['jrrp']} ({data['fortune']})")
+        for date in sorted_dates[:10]:  # 只显示最近10条
+            data = user_history[date]
+            history_lines.append(f"{date}: {data['jrrp']} ({data['fortune']})")
 
-        # 格式化历史记录
-        history_template = self.config.get("history_template",
+        # 使用模板
+        history_template = self.config.get("templates", {}).get("history",
             "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}")
 
-        result = self.format_template(history_template, {
-            "nickname": target_name,
-            "history": "\n".join(history_lines),
-            "avgjrrp": f"{avg_jrrp:.1f}",
-            "maxjrrp": str(max_jrrp),
-            "minjrrp": str(min_jrrp)
-        })
+        result = history_template.format(
+            nickname=target_nickname,
+            history="\n".join(history_lines),
+            avgjrrp=avg_jrrp,
+            maxjrrp=max_jrrp,
+            minjrrp=min_jrrp
+        )
 
         yield event.plain_result(result)
 
     @filter.command("jrrpdelete", alias={"jrrpdel"})
-    async def jrrp_delete_command(self, event: AstrMessageEvent, *args):
-        """删除个人人品记录"""
+    async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = ""):
+        """删除个人人品历史记录"""
         user_id = event.get_sender_id()
 
-        if args and args[0] == "--confirm":
-            # 确认删除
-            if user_id in self.history_data:
-                del self.history_data[user_id]
+        if confirm != "--confirm":
+            yield event.plain_result("⚠️ 警告：此操作将删除您的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
+            return
 
-            # 删除今日记录
-            today = self.get_today_key()
-            if today in self.fortune_data and user_id in self.fortune_data[today]:
-                del self.fortune_data[today][user_id]
+        # 删除历史记录
+        if user_id in self.history_data:
+            del self.history_data[user_id]
+            self._save_data(self.history_data, self.history_file)
 
-            self.save_data(self.fortune_data, "fortune_data.json")
-            self.save_data(self.history_data, "history_data.json")
+        # 删除今日记录
+        today = self._get_today_key()
+        if today in self.daily_data and user_id in self.daily_data[today]:
+            del self.daily_data[today][user_id]
+            self._save_data(self.daily_data, self.fortune_file)
 
-            yield event.plain_result("✅ 您的人品记录已全部删除！")
-        else:
-            yield event.plain_result("⚠️ 确定要删除您的所有人品记录吗？\n请使用 /jrrpdelete --confirm 确认删除")
+        yield event.plain_result("✅ 您的人品历史记录已成功删除")
 
     @filter.command("jrrpreset", alias={"jrrpre"})
     @filter.permission_type(filter.PermissionType.ADMIN)
-    async def jrrp_reset_command(self, event: AstrMessageEvent, *args):
+    async def jrrpreset(self, event: AstrMessageEvent, confirm: str = ""):
         """重置所有人品数据（仅管理员）"""
-        if args and args[0] == "--confirm":
-            # 确认重置
-            self.fortune_data = {}
-            self.history_data = {}
+        if confirm != "--confirm":
+            yield event.plain_result("⚠️ 警告：此操作将删除所有用户的人品数据！\n如确认重置，请使用：/jrrpreset --confirm")
+            return
 
-            self.save_data(self.fortune_data, "fortune_data.json")
-            self.save_data(self.history_data, "history_data.json")
+        # 清空所有数据
+        self.daily_data = {}
+        self.history_data = {}
+        self._save_data(self.daily_data, self.fortune_file)
+        self._save_data(self.history_data, self.history_file)
 
-            yield event.plain_result("✅ 所有人品数据已重置！")
-        else:
-            yield event.plain_result("⚠️ 确定要重置所有人品数据吗？\n请使用 /jrrpreset --confirm 确认重置")
-
-    def clean_expired_data(self):
-        """清理过期数据"""
-        now = datetime.now()
-
-        # 清理过期的fortune_data
-        for date_key in list(self.fortune_data.keys()):
-            # 删除超过7天的数据
-            try:
-                date = datetime.strptime(date_key, "%Y-%m-%d")
-                if (now - date).days > 7:
-                    del self.fortune_data[date_key]
-                    continue
-            except:
-                pass
-
-            # 检查每个用户的过期时间
-            for user_id in list(self.fortune_data[date_key].keys()):
-                user_data = self.fortune_data[date_key][user_id]
-                if "expire" in user_data:
-                    try:
-                        expire_time = datetime.fromisoformat(user_data["expire"])
-                        if now > expire_time:
-                            del self.fortune_data[date_key][user_id]
-                    except:
-                        pass
-
-            # 如果这一天没有数据了，删除这一天
-            if not self.fortune_data[date_key]:
-                del self.fortune_data[date_key]
+        yield event.plain_result("✅ 所有人品数据已重置")
 
     async def terminate(self):
         """插件卸载时的清理工作"""
-        logger.info("DailyFortunePlugin 正在卸载...")
-        # 保存最后的数据
-        self.save_data(self.fortune_data, "fortune_data.json")
-        self.save_data(self.history_data, "history_data.json")
+        logger.info("astrbot_plugin_daily_fortune1 插件正在卸载...")
+
+        # 根据配置决定是否删除数据
+        if self.config.get("delete_data_on_uninstall", False):
+            import shutil
+            if self.data_dir.exists():
+                shutil.rmtree(self.data_dir)
+                logger.info(f"已删除插件数据目录: {self.data_dir}")
+
+        if self.config.get("delete_config_on_uninstall", False):
+            import os
+            config_file = f"data/config/{self.metadata.name}_config.json"
+            if os.path.exists(config_file):
+                os.remove(config_file)
+                logger.info(f"已删除配置文件: {config_file}")
+
+        logger.info("astrbot_plugin_daily_fortune1 插件已卸载")
