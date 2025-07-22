@@ -1,5 +1,5 @@
 name: "astrbot_plugin_daily_fortune1"
 description: "每日人品值检测，支持排行榜和历史查询"
 author: "xSapientia"
-version: "1.0.0"
+version: "0.0.1"
 repo: "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
