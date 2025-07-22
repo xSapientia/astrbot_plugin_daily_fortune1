@@ -70,5 +70,17 @@
     "type": "int",
     "default": 10,
     "hint": "排行榜最多显示的人数，-1表示无限制"
+  },
+  "delete_config_on_uninstall": {
+    "description": "卸载时删除配置文件",
+    "type": "bool",
+    "default": false,
+    "hint": "插件卸载时是否删除位于 data/config 的配置文件"
+  },
+  "delete_data_on_uninstall": {
+    "description": "卸载时删除数据文件",
+    "type": "bool",
+    "default": false,
+    "hint": "插件卸载时是否删除位于 data/plugin_data/astrbot_plugin_daily_fortune 的数据文件"
   }
 }
