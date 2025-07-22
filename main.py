@@ -22,10 +22,14 @@ import astrbot.api.message_components as Comp
 class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
+
+        # 现在可以安全地访问 self.metadata 了
+        self.plugin_name = "astrbot_plugin_daily_fortune1"  # 硬编码插件名，避免依赖metadata
+
         # 处理配置兼容性
         if config is None:
             # 如果没有传入config，尝试从文件加载
-            config_path = f"data/config/{self.metadata.name}_config.json"
+            config_path = f"data/config/{self.plugin_name}_config.json"
             if os.path.exists(config_path):
                 try:
                     with open(config_path, 'r', encoding='utf-8') as f:
@@ -37,7 +41,7 @@ class DailyFortunePlugin(Star):
                 config = {}
 
         self.config = config if isinstance(config, dict) else dict(config)
-        self.data_dir = f"data/plugin_data/{self.metadata.name}"
+        self.data_dir = f"data/plugin_data/{self.plugin_name}"
         self.ensure_data_dir()
 
         # 加载数据
