@@ -6,8 +6,7 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger, AstrBotConfig
-from astrbot.api.provider import ProviderRequest
+from astrbot.api import logger
 
 
 @register(
@@ -18,9 +17,15 @@ from astrbot.api.provider import ProviderRequest
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
-    def __init__(self, context: Context, config: AstrBotConfig):
+    def __init__(self, context: Context, config: Dict = None):
+        """初始化插件，兼容有无config参数的情况"""
         super().__init__(context)
-        self.config = config
+
+        # 如果没有传入config，尝试从文件加载
+        if config is None:
+            config = self._load_config()
+
+        self.config = config or {}
         self.data_dir = "data/plugin_data/astrbot_plugin_daily_fortune1"
         self.ensure_data_dir()
 
@@ -47,6 +52,17 @@ class DailyFortunePlugin(Star):
         }
 
         logger.info("DailyFortunePlugin 插件已加载")
+
+    def _load_config(self) -> Dict:
+        """从文件加载配置"""
+        try:
+            config_path = f"data/config/{self.metadata.name}_config.json"
+            if os.path.exists(config_path):
+                with open(config_path, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+        except Exception as e:
+            logger.warning(f"加载配置文件失败: {e}")
+        return {}
 
     def ensure_data_dir(self):
         """确保数据目录存在"""
@@ -442,12 +458,15 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrpreset", alias={"jrrpre"})
     async def jrrp_reset_command(self, event: AstrMessageEvent, confirm: str = None):
         """重置所有数据（仅管理员）"""
-        # 检查权限
-        if not self.context.get_config().get("admins", []):
+        # 获取AstrBot配置中的管理员列表
+        astrbot_config = self.context.get_config()
+        admins = astrbot_config.get("admins", [])
+
+        if not admins:
             yield event.plain_result("未配置管理员列表")
             return
 
-        if event.get_sender_id() not in self.context.get_config().get("admins", []):
+        if event.get_sender_id() not in admins:
             yield event.plain_result("⛔ 只有管理员才能执行此操作")
             return
 
