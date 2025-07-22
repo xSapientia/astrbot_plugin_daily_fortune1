@@ -27,14 +27,16 @@ class DailyFortunePlugin(Star):
         super().__init__()
         self.data_dir = os.path.join("data", "plugin_data")
         os.makedirs(self.data_dir, exist_ok=True)
-        self.data_file = os.path.join(self.data_dir, "daily_fortune.json")self.config = self.load_config()
+        self.data_file = os.path.join(self.data_dir, "daily_fortune.json")
+        self.config = self.load_config()
         self.data = self.load_data()
+
         # 从配置获取设置
         self.enabled = self.config.get("enabled", True)
         self.min_value = self.config.get("min_value", 0)
-        self.max_value = self.config.get("max_value", 100)
-        self.ranking_limit = self.config.get("ranking_limit", 10)self.detecting_message = self.config.get("detecting_message", "神秘的能量汇聚，窥见你的命运，正在祈祷中...")
-        self.detection_prompt = self.config.get("detection_prompt", "测试今日人品的时候，显示user_id的 title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字")
+        self.max_value = self.config.get("max_value", 100)self.ranking_limit = self.config.get("ranking_limit", 10)
+        self.detecting_message = self.config.get("detecting_message", "神秘的能量汇聚，窥见你的命运，正在祈祷中...")
+        self.detection_prompt = self.config.get("detection_prompt", "测试今日人品的时候，显示user_id的title&card/nickname，模拟一下水晶球上显现今日人品值的过程、结果，字数不超过50字")
         self.advice_prompt = self.config.get("advice_prompt", "你对使用人今日人品值下的建议，字数不超过50字")
 
         # LLM配置
@@ -42,12 +44,14 @@ class DailyFortunePlugin(Star):
         self.api_key = self.config.get("llm_api_key", "")
         self.api_url = self.config.get("llm_api_url", "")
         self.model_name = self.config.get("llm_model_name", "")
-        self.persona_name = self.config.get("persona_name", "")
-
-    def load_config(self) -> Dict:
+        self.persona_name = self.config.get("persona_name", "")def load_config(self) -> Dict:
         """加载插件配置"""
-        config_manager = ConfigManager()
-        return config_manager.get("astrbot_plugin_daily_fortune1", {})
+        try:
+            config_manager = ConfigManager()
+            return config_manager.get("astrbot_plugin_daily_fortune1", {})
+        except Exception as e:
+            logger.warning(f"加载配置失败，使用默认配置: {e}")
+            return {}
 
     def load_data(self) -> Dict:
         """加载数据文件"""
@@ -55,7 +59,8 @@ class DailyFortunePlugin(Star):
             try:
                 with open(self.data_file, 'r', encoding='utf-8') as f:
                     return json.load(f)
-            except:
+            except Exception as e:
+                logger.error(f"加载数据文件失败: {e}")
                 return {"daily_records": {}, "user_history": {}, "group_records": {}}
         return {"daily_records": {}, "user_history": {}, "group_records": {}}
 
@@ -67,16 +72,16 @@ class DailyFortunePlugin(Star):
         except Exception as e:
             logger.error(f"保存数据失败: {e}")
 
-    def get_today_key(self) -> str:"""获取今日日期键"""
-        tz = timezone(timedelta(hours=8))  # 中国时区
+    def get_today_key(self) -> str:"""获取今日日期键"""tz = timezone(timedelta(hours=8))# 中国时区
         return datetime.now(tz).strftime("%Y-%m-%d")
 
-    def get_fortune_level(self, value: int) -> str:"""根据人品值获取运势等级"""
+    def get_fortune_level(self, value: int) -> str:
+        """根据人品值获取运势等级"""
         if value == 0:
             return "极其倒霉"
-        elif 1 <= value <= 2:
+        elif1 <= value <= 2:
             return "倒大霉"
-        elif 3 <= value <= 10:
+        elif 3<= value <= 10:
             return "十分不顺"
         elif 10 <= value <= 20:
             return "略微不顺"
@@ -100,18 +105,18 @@ class DailyFortunePlugin(Star):
 
     async def get_llm_response(self, prompt: str, event: AstrMessageEvent) -> str:
         """调用LLM获取回复"""
-        try:# 获取核心组件
+        try:
+            # 获取核心组件
             provider_manager = ProviderManager.get_instance()
             # 确定使用的provider
             if self.provider_id:
                 provider = provider_manager.get_provider(self.provider_id)
-            else:
-                provider = provider_manager.get_default_provider()
+            else:provider = provider_manager.get_default_provider()
 
             if not provider:
                 return "无法获取LLM服务"
 
-            #构建消息
+            # 构建消息
             user_info = f"用户名: {event.sender.nickname}"
             if hasattr(event.sender, 'card') and event.sender.card:
                 user_info += f", 群名片: {event.sender.card}"
@@ -132,6 +137,7 @@ class DailyFortunePlugin(Star):
         """处理人品检测"""
         if not self.enabled:
             return "今日人品功能暂时关闭"
+
         user_id = str(event.sender.user_id)
         today = self.get_today_key()
 
@@ -147,7 +153,7 @@ class DailyFortunePlugin(Star):
             result += record["full_response"]
             return result
 
-        # 首次检测
+        # 首次检测，先发送检测中消息
         await event.reply([Plain(self.detecting_message)])
 
         # 生成人品值
@@ -161,8 +167,7 @@ class DailyFortunePlugin(Star):
         )
 
         advice_response = await self.get_llm_response(
-            f"{self.advice_prompt}，人品值是{fortune_value}，运势等级是{fortune_level}",
-            event
+            f"{self.advice_prompt}，人品值是{fortune_value}，运势等级是{fortune_level}",event
         )
 
         # 构建完整回复
@@ -197,8 +202,7 @@ class DailyFortunePlugin(Star):
             group_id = str(event.group_id)
             if group_id not in self.data["group_records"]:
                 self.data["group_records"][group_id] = {}
-            if today not in self.data["group_records"][group_id]:
-                self.data["group_records"][group_id][today] = []
+            if today not in self.data["group_records"][group_id]:self.data["group_records"][group_id][today] = []
 
             self.data["group_records"][group_id][today].append({
                 "user_id": user_id,
@@ -221,10 +225,13 @@ class DailyFortunePlugin(Star):
         if group_id not in self.data["group_records"] or today not in self.data["group_records"][group_id]:
             return "今日群内暂无人品记录"
 
-        records = self.data["group_records"][group_id][today]sorted_records = sorted(records, key=lambda x: x["value"], reverse=True)
+        records = self.data["group_records"][group_id][today]
+        sorted_records = sorted(records, key=lambda x: x["value"], reverse=True)
+
         # 限制显示数量
         if self.ranking_limit > 0:
             sorted_records = sorted_records[:self.ranking_limit]
+
         result = f"🏆 今日群人品排行榜({today})\n\n"
         for i, record in enumerate(sorted_records, 1):
             emoji = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
@@ -237,16 +244,18 @@ class DailyFortunePlugin(Star):
         user_id = str(event.sender.user_id)
 
         if user_id not in self.data["user_history"]:
-            return "暂无历史人品记录"history = self.data["user_history"][user_id]if not history:
+            return "暂无历史人品记录"
+
+        history = self.data["user_history"][user_id]
+        if not history:
             return "暂无历史人品记录"
 
         result = f"📊 【{event.sender.nickname}】的人品历史\n\n"
 
         # 按日期排序，最近的在前
-        sorted_dates = sorted(history.keys(), reverse=True)[:10]  # 显示最近10天
+        sorted_dates = sorted(history.keys(), reverse=True)[:10]# 显示最近10天
         for date in sorted_dates:
-            record = history[date]
-            result += f"📅 {date}: {record['value']} ({record['level']})\n"
+            record = history[date]result += f"📅 {date}: {record['value']} ({record['level']})\n"
 
         return result
 
@@ -259,10 +268,14 @@ class DailyFortunePlugin(Star):
 
         # 删除历史记录
         if user_id in self.data["user_history"]:
-            del self.data["user_history"][user_id]# 删除每日记录
-        for date in self.data["daily_records"]:
+            del self.data["user_history"][user_id]
+
+        # 删除每日记录
+        for date in list(self.data["daily_records"].keys()):
             if user_id in self.data["daily_records"][date]:
-                del self.data["daily_records"][date][user_id]# 删除群组记录
+                del self.data["daily_records"][date][user_id]
+
+        # 删除群组记录
         for group_id in self.data["group_records"]:
             for date in self.data["group_records"][group_id]:
                 self.data["group_records"][group_id][date] = [
@@ -280,14 +293,10 @@ class DailyFortunePlugin(Star):
 
         self.data = {"daily_records": {}, "user_history": {}, "group_records": {}}
         self.save_data()
-        return "✅ 所有人品数据已重置"
-
-    async def handler(self, event: AstrMessageEvent) -> None:
+        return "✅ 所有人品数据已重置"async def handler(self, event: AstrMessageEvent) -> None:
         """主处理函数"""
         if not isinstance(event.message_str, str):
-            return
-
-        message = event.message_str.strip()
+            returnmessage = event.message_str.strip()
 
         # 处理各种命令
         if message == "-jrrp":
@@ -297,6 +306,7 @@ class DailyFortunePlugin(Star):
         elif message == "-jrrprank":
             response = await self.handle_ranking(event)
             await event.reply([Plain(response)])
+
         elif message in ["-jrrphistory", "-jrrphi"]:
             response = await self.handle_history(event)
             await event.reply([Plain(response)])
