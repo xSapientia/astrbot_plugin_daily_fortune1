@@ -1,111 +1,127 @@
 {
-  "enable_plugin": {
-    "description": "是否启用插件",
-    "type": "bool",
-    "default": true
-  },
   "jrrp_algorithm": {
     "description": "人品值随机算法",
     "type": "string",
-    "options": ["hash", "random", "seed"],
     "default": "hash",
-    "hint": "hash: 基于用户ID和日期的哈希值; random: 真随机; seed: 基于种子的伪随机"
-  },
-  "cache_days": {
-    "description": "结果缓存天数",
-    "type": "int",
-    "default": 1,
-    "hint": "缓存结果的保存天数"
-  },
-  "history_days": {
-    "description": "历史记录天数",
-    "type": "int",
-    "default": 30,
-    "hint": "显示最近多少天的历史记录"
-  },
-  "show_cached_result": {
-    "description": "查询时显示缓存的完整结果",
-    "type": "bool",
-    "default": false
+    "options": ["hash", "random"],
+    "hint": "hash: 基于用户ID和日期的哈希算法，相同用户相同日期结果固定; random: 纯随机算法"
   },
   "detecting_message": {
     "description": "检测中提示文本",
     "type": "string",
     "default": "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...",
-    "hint": "支持变量: {nickname}, {card}, {title}"
+    "hint": "支持变量: {nickname}"
   },
-  "process_prompt": {
-    "description": "过程模拟提示词",
-    "type": "text",
-    "default": "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
-    "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}"
+  "show_cached_result": {
+    "description": "查询时是否显示缓存的完整结果",
+    "type": "bool",
+    "default": true,
+    "hint": "开启后，再次查询时会显示首次生成的完整结果"
   },
-  "advice_prompt": {
-    "description": "评语建议提示词",
-    "type": "text",
-    "default": "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内",
-    "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}"
+  "history_days": {
+    "description": "个人历史记录计算与缓存天数",
+    "type": "int",
+    "default": 30,
+    "hint": "保留最近多少天的历史记录"
   },
-  "result_template": {
-    "description": "随机结果模板",
-    "type": "text",
-    "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}",
-    "hint": "支持所有变量"
-  },
-  "query_template": {
-    "description": "查询结果模板",
-    "type": "text",
-    "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
-    "hint": "支持所有变量"
-  },
-  "rank_template": {
-    "description": "排行榜模板",
-    "type": "text",
-    "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}",
-    "hint": "支持变量: {date}, {ranks}"
-  },
-  "rank_item_template": {
-    "description": "排行榜项目模板",
+  "llm_provider_id": {
+    "description": "LLM提供商ID",
     "type": "string",
-    "default": "{medal} {nickname}: {jrrp} ({fortune})",
-    "hint": "支持变量: {medal}, {nickname}, {jrrp}, {fortune}"
+    "default": "",
+    "hint": "留空使用AstrBot默认提供商，填写则使用指定的provider_id"
   },
-  "history_template": {
-    "description": "历史记录模板",
-    "type": "text",
-    "default": "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}",
-    "hint": "支持所有统计变量"
-  },
-  "llm": {
-    "description": "LLM配置",
+  "llm_api": {
+    "description": "第三方LLM接口配置",
     "type": "object",
     "items": {
-      "provider_id": {
-        "description": "指定使用的Provider ID",
-        "type": "string",
-        "hint": "留空使用默认Provider；填写后以下配置可选填"
-      },
       "api_key": {
-        "description": "OpenAI兼容的API Key",
+        "description": "API密钥",
         "type": "string",
-        "hint": "当provider_id未填写时必填"
+        "default": ""
       },
-      "api_url": {
+      "url": {
         "description": "API地址",
         "type": "string",
-        "hint": "支持填写到/v1或/v1/chat/completions，自动识别"
+        "default": "",
+        "hint": "支持填写到/v1或/v1/chat/completions"
       },
       "model": {
         "description": "模型名称",
         "type": "string",
-        "default": "gpt-3.5-turbo",
-        "hint": "如: gpt-4, claude-3, deepseek-chat等"
-      },
-      "persona_name": {
-        "description": "指定使用的人格名称",
-        "type": "string",
-        "hint": "留空使用默认人格"
+        "default": "gpt-3.5-turbo"
       }
     }
+  },
+  "persona_name": {
+    "description": "使用的人格名称",
+    "type": "string",
+    "default": "",
+    "hint": "留空使用AstrBot默认人格，填写则使用指定的人格"
+  },
+  "prompts": {
+    "description": "LLM提示词配置",
+    "type": "object",
+    "items": {
+      "process": {
+        "description": "过程模拟提示词",
+        "type": "text",
+        "default": "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
+        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}"
+      },
+      "advice": {
+        "description": "评语建议提示词",
+        "type": "text",
+        "default": "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内",
+        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}"
+      }
+    }
+  },
+  "templates": {
+    "description": "显示模板配置",
+    "type": "object",
+    "items": {
+      "random": {
+        "description": "首次查询结果模板",
+        "type": "text",
+        "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}。",
+        "hint": "支持变量: {process}, {jrrp}, {fortune}, {advice}"
+      },
+      "query": {
+        "description": "再次查询结果模板",
+        "type": "text",
+        "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
+        "hint": "支持变量: {nickname}, {jrrp}, {fortune}, {femoji}"
+      },
+      "rank": {
+        "description": "排行榜条目模板",
+        "type": "string",
+        "default": "{medal} {nickname}: {jrrp} ({fortune})",
+        "hint": "支持变量: {medal}, {nickname}, {jrrp}, {fortune}"
+      },
+      "board": {
+        "description": "排行榜整体模板",
+        "type": "text",
+        "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}",
+        "hint": "支持变量: {date}, {ranks}"
+      },
+      "history": {
+        "description": "历史记录模板",
+        "type": "text",
+        "default": "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}",
+        "hint": "支持变量: {nickname}, {history}, {avgjrrp}, {maxjrrp}, {minjrrp}"
+      }
+    }
+  },
+  "delete_data_on_uninstall": {
+    "description": "卸载时是否删除缓存数据",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后卸载插件时会删除所有用户数据"
+  },
+  "delete_config_on_uninstall": {
+    "description": "卸载时是否删除配置文件",
+    "type": "bool",
+    "default": false,
+    "hint": "开启后卸载插件时会删除配置文件"
   }
 }
