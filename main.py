@@ -1,6 +1,6 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
+from astrbot.api import logger, AstrBotConfig
 import json
 import random
 import os
@@ -12,14 +12,15 @@ import asyncio
 @register(
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
-    "今日人品测试插件 - 增强版",
+    "今日人品测试插件增强版",
     "0.0.1",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1",
 )
 class DailyFortunePlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.context = context
+        self.config = config or {}
 
         # 数据文件路径
         self.data_dir = os.path.join("data", "plugin_data", "astrbot_plugin_daily_fortune1")
@@ -39,43 +40,11 @@ class DailyFortunePlugin(Star):
             (100, 100, "万事皆允", "🤩")
         ]
 
-        # 初始化配置
-        self._init_config()
         logger.info("今日人品插件1代 v0.0.1 加载成功！")
-
-    def _init_config(self):
-        """初始化配置"""
-        default_config = {
-            "enable_plugin": True,
-            "min_fortune": 0,
-            "max_fortune": 100,
-            "fortune_algorithm": "random",  # random/weighted
-            "cache_days": 7,
-            "history_days": 30,
-            "show_cached_result": True,
-            "detecting_message": "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...",
-            "process_prompt": "使用{nickname}的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
-            "advice_prompt": "使用{nickname}的简称称呼，对{nickname}的今日人品值{jrrp}给出你的评语和建议，50字以内",
-            "result_template": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}",
-            "query_template": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
-            "history_template": "📚 {nickname} 的人品历史记录\n{records}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}",
-            "rank_template": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}",
-            "rank_item_template": "{medal} {nickname}: {jrrp} ({fortune})",
-            "llm_provider_id": "",
-            "llm_api_key": "",
-            "llm_api_url": "",
-            "llm_model": "",
-            "persona_name": ""
-        }
-
-        for key, default_value in default_config.items():
-            if self.context.get_config(key) is None:
-                self.context.set_config(key, default_value)
 
     def _get_config(self, key: str, default: Any = None) -> Any:
         """获取配置值"""
-        value = self.context.get_config(key)
-        return value if value is not None else default
+        return self.config.get(key, default)
 
     async def _load_json(self, file_path: str) -> dict:
         """加载JSON文件"""
@@ -132,7 +101,7 @@ class DailyFortunePlugin(Star):
     def _format_user_name(self, info: Dict[str, str]) -> str:
         """格式化用户显示名称"""
         name = info['card'] if info['card'] else info['nickname']
-        if info['title']:
+        if info['title'] and info['title'] not in ['', 'unknown', None]:
             name = f"[{info['title']}]{name}"
         return name
 
@@ -144,17 +113,11 @@ class DailyFortunePlugin(Star):
 
         if algorithm == "weighted":
             # 加权算法，使中间值概率更高
-            values = []
-            weights = []
-            for i in range(min_val, max_val + 1):
-                values.append(i)
-                # 使用正态分布权重
-                center = (min_val + max_val) / 2
-                weight = 100 * (1 / (10 * 2.5)) * (2.71828 ** (-0.5 * ((i - center) / 10) ** 2))
-                weights.append(weight)
+            values = list(range(min_val, max_val + 1))
+            center = (min_val + max_val) / 2
+            weights = [100 * (1 / (10 * 2.5)) * (2.71828 ** (-0.5 * ((i - center) / 10) ** 2)) for i in values]
             return random.choices(values, weights=weights)[0]
         else:
-            # 默认随机算法
             return random.randint(min_val, max_val)
 
     async def _get_llm_provider(self):
@@ -162,34 +125,23 @@ class DailyFortunePlugin(Star):
         provider_id = self._get_config("llm_provider_id", "")
 
         if provider_id:
-            # 使用指定的provider
             provider = self.context.get_provider_by_id(provider_id)
             if provider:
                 return provider
 
-        # 检查是否配置了自定义LLM
-        api_key = self._get_config("llm_api_key", "")
-        api_url = self._get_config("llm_api_url", "")
-        model = self._get_config("llm_model", "")
-
-        if api_key and api_url:
-            # TODO: 创建自定义provider
-            pass
-
-        # 使用默认provider
         return self.context.get_using_provider()
 
-    async def _generate_with_llm(self, prompt: str, user_info: Dict[str, str], fortune: int, level: str) -> str:
+    async def _generate_with_llm(self, prompt_template: str, user_info: Dict[str, str], fortune: int, level: str) -> str:
         """使用LLM生成文本"""
         provider = await self._get_llm_provider()
         if not provider:
             return ""
 
         # 替换变量
-        prompt = prompt.format(
-            nickname=user_info['nickname'],
-            card=user_info['card'],
-            title=user_info['title'],
+        prompt = prompt_template.format(
+            nickname=user_info.get('nickname', ''),
+            card=user_info.get('card', ''),
+            title=user_info.get('title', ''),
             jrrp=fortune,
             fortune=level
         )
@@ -197,18 +149,22 @@ class DailyFortunePlugin(Star):
         try:
             # 获取人格
             persona_name = self._get_config("persona_name", "")
-            if not persona_name:
-                # 使用默认人格
-                persona_name = self.context.provider_manager.selected_default_persona.get("name", "")
 
-            # 调用LLM
-            kwargs = {"prompt": prompt, "contexts": []}
+            # 构建请求参数
+            kwargs = {
+                "prompt": prompt,
+                "session_id": None,
+                "contexts": []
+            }
+
+            # 尝试通过不同方式设置人格
             if persona_name:
+                # 某些provider可能支持personality参数
                 kwargs["personality"] = persona_name
 
             response = await provider.text_chat(**kwargs)
             if response and response.completion_text:
-                return response.completion_text
+                return response.completion_text.strip()
         except Exception as e:
             logger.error(f"LLM调用失败: {e}")
 
@@ -217,10 +173,36 @@ class DailyFortunePlugin(Star):
     def _apply_template(self, template: str, **kwargs) -> str:
         """应用模板并替换变量"""
         try:
+            # 处理可能的None值
+            for key, value in kwargs.items():
+                if value is None:
+                    kwargs[key] = ""
             return template.format(**kwargs)
         except Exception as e:
-            logger.error(f"模板应用失败: {e}")
+            logger.error(f"模板应用失败: {e}, template: {template}, kwargs: {kwargs}")
             return template
+
+    async def _clean_old_cache(self):
+        """清理过期缓存"""
+        cache_days = self._get_config("cache_days", 7)
+        today = date.today()
+
+        fortunes = await self._load_json(self.fortune_file)
+        keys_to_delete = []
+
+        for date_key in fortunes.keys():
+            try:
+                fortune_date = datetime.strptime(date_key, "%Y-%m-%d").date()
+                if (today - fortune_date).days > cache_days:
+                    keys_to_delete.append(date_key)
+            except:
+                pass
+
+        for key in keys_to_delete:
+            del fortunes[key]
+
+        if keys_to_delete:
+            await self._save_json(self.fortune_file, fortunes)
 
     @filter.command("jrrp")
     async def daily_fortune(self, event: AstrMessageEvent):
@@ -235,6 +217,9 @@ class DailyFortunePlugin(Star):
             nickname = self._format_user_name(user_info)
             today = date.today().strftime("%Y-%m-%d")
 
+            # 清理过期缓存
+            await self._clean_old_cache()
+
             # 加载数据
             fortunes = await self._load_json(self.fortune_file)
             if today not in fortunes:
@@ -248,8 +233,11 @@ class DailyFortunePlugin(Star):
                 level, emoji = self._get_fortune_level(fortune)
 
                 # 应用查询模板
+                query_template = self._get_config("query_template",
+                    "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
+
                 result = self._apply_template(
-                    self._get_config("query_template"),
+                    query_template,
                     nickname=nickname,
                     jrrp=fortune,
                     fortune=level,
@@ -259,8 +247,10 @@ class DailyFortunePlugin(Star):
                 # 如果开启了显示缓存结果
                 if self._get_config("show_cached_result", True) and "process" in data:
                     result += "\n\n-----以下为今日运势测算场景还原-----\n"
+                    result_template = self._get_config("result_template",
+                        "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
                     result += self._apply_template(
-                        self._get_config("result_template"),
+                        result_template,
                         process=data.get("process", ""),
                         jrrp=fortune,
                         fortune=level,
@@ -271,10 +261,9 @@ class DailyFortunePlugin(Star):
                 return
 
             # 首次测试，发送检测提示
-            detecting_msg = self._apply_template(
-                self._get_config("detecting_message"),
-                nickname=nickname
-            )
+            detecting_template = self._get_config("detecting_message",
+                "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...")
+            detecting_msg = self._apply_template(detecting_template, nickname=nickname)
             yield event.plain_result(detecting_msg)
 
             # 生成人品值
@@ -282,15 +271,17 @@ class DailyFortunePlugin(Star):
             level, emoji = self._get_fortune_level(fortune)
 
             # 使用LLM生成内容
-            process = await self._generate_with_llm(
-                self._get_config("process_prompt"),
-                user_info, fortune, level
-            ) or f"{nickname}的水晶球中浮现出神秘的光芒..."
+            process_prompt = self._get_config("process_prompt",
+                "使用{nickname}的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
+            process = await self._generate_with_llm(process_prompt, user_info, fortune, level)
+            if not process:
+                process = f"{nickname}的水晶球中浮现出神秘的光芒..."
 
-            advice = await self._generate_with_llm(
-                self._get_config("advice_prompt"),
-                user_info, fortune, level
-            ) or "保持平常心，做好自己。"
+            advice_prompt = self._get_config("advice_prompt",
+                "使用{nickname}的简称称呼，对{nickname}的今日人品值{jrrp}给出你的评语和建议，50字以内")
+            advice = await self._generate_with_llm(advice_prompt, user_info, fortune, level)
+            if not advice:
+                advice = "保持平常心，做好自己。"
 
             # 保存数据
             fortunes[today][user_id] = {
@@ -316,8 +307,10 @@ class DailyFortunePlugin(Star):
             await self._save_json(self.history_file, history)
 
             # 应用结果模板
+            result_template = self._get_config("result_template",
+                "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
             result = self._apply_template(
-                self._get_config("result_template"),
+                result_template,
                 process=process,
                 jrrp=fortune,
                 fortune=level,
@@ -353,7 +346,10 @@ class DailyFortunePlugin(Star):
             group_fortunes = []
             for user_id, data in fortunes[today].items():
                 user_info = data.get("user_info", {})
-                nickname = self._format_user_name(user_info) if user_info else "未知用户"
+                if user_info:
+                    nickname = self._format_user_name(user_info)
+                else:
+                    nickname = data.get("name", "未知用户")
                 group_fortunes.append((nickname, data["value"]))
 
             # 排序
@@ -362,11 +358,15 @@ class DailyFortunePlugin(Star):
             # 生成排行内容
             medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
             ranks = []
+
+            rank_item_template = self._get_config("rank_item_template",
+                "{medal} {nickname}: {jrrp} ({fortune})")
+
             for idx, (name, value) in enumerate(group_fortunes):
                 medal = medals[idx] if idx < len(medals) else f"{idx+1}."
                 level, _ = self._get_fortune_level(value)
                 rank_item = self._apply_template(
-                    self._get_config("rank_item_template"),
+                    rank_item_template,
                     medal=medal,
                     nickname=name,
                     jrrp=value,
@@ -375,8 +375,10 @@ class DailyFortunePlugin(Star):
                 ranks.append(rank_item)
 
             # 应用排行榜模板
+            rank_template = self._get_config("rank_template",
+                "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}")
             result = self._apply_template(
-                self._get_config("rank_template"),
+                rank_template,
                 date=today,
                 ranks="\n".join(ranks)
             )
@@ -397,8 +399,7 @@ class DailyFortunePlugin(Star):
 
             # 获取目标用户
             target_id = event.get_sender_id()
-
-            # TODO: 支持@查询他人记录
+            # TODO: 后续支持@查询他人记录
 
             history = await self._load_json(self.history_file)
 
@@ -410,11 +411,9 @@ class DailyFortunePlugin(Star):
 
             # 生成记录内容
             records = []
-            values = []
             for record in user_history[-10:]:  # 最近10条
                 date_str = record["date"]
                 value = record["value"]
-                values.append(value)
                 level, _ = self._get_fortune_level(value)
                 records.append(f"{date_str}: {value} ({level})")
 
@@ -429,8 +428,10 @@ class DailyFortunePlugin(Star):
             nickname = self._format_user_name(user_info)
 
             # 应用历史模板
+            history_template = self._get_config("history_template",
+                "📚 {nickname} 的人品历史记录\n{records}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}")
             result = self._apply_template(
-                self._get_config("history_template"),
+                history_template,
                 nickname=nickname,
                 records="\n".join(records),
                 avgjrrp=f"{avg_jrrp:.1f}",
@@ -461,6 +462,8 @@ class DailyFortunePlugin(Star):
                 if user_id in fortunes[date_key]:
                     del fortunes[date_key][user_id]
                     deleted = True
+                    if not fortunes[date_key]:
+                        del fortunes[date_key]
 
             if deleted:
                 await self._save_json(self.fortune_file, fortunes)
