@@ -10,6 +10,7 @@ from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
 import astrbot.api.message_components as Comp
+from astrbot.api.provider import Provider, ProviderMetadata
 
 
 @register(
@@ -69,7 +70,73 @@ class DailyFortunePlugin(Star):
             "大吉": "🎉"
         }
 
+        # 初始化自定义LLM provider（如果配置了）
+        self.custom_provider = None
+        self._init_custom_provider()
+
         logger.info("DailyFortunePlugin 初始化完成")
+
+    def _init_custom_provider(self):
+        """初始化自定义的LLM provider"""
+        llm_config = self.config.get("llm", {})
+        if not isinstance(llm_config, dict):
+            return
+
+        # 如果配置了provider_id，则不需要创建自定义provider
+        if llm_config.get("provider_id"):
+            return
+
+        # 检查是否配置了API信息
+        api_key = llm_config.get("api_key")
+        api_url = llm_config.get("api_url")
+        model = llm_config.get("model", "gpt-3.5-turbo")
+
+        if api_key and api_url:
+            try:
+                # 标准化API URL
+                api_url = self._normalize_api_url(api_url)
+
+                # 创建自定义provider
+                from astrbot.core.provider.openai_compatible import OpenAICompatibleProvider
+
+                # 创建metadata
+                metadata = ProviderMetadata(
+                    id="daily_fortune_custom_llm",
+                    name="Daily Fortune Custom LLM",
+                    type="llm"
+                )
+
+                # 创建配置
+                custom_config = {
+                    "api_key": api_key,
+                    "api_base": api_url,
+                    "model": [model]
+                }
+
+                # 实例化provider
+                self.custom_provider = OpenAICompatibleProvider(custom_config, metadata)
+                logger.info(f"创建自定义LLM provider成功: {api_url}")
+
+            except Exception as e:
+                logger.error(f"创建自定义LLM provider失败: {e}")
+                self.custom_provider = None
+
+    def _normalize_api_url(self, url: str) -> str:
+        """标准化API URL"""
+        # 移除末尾的斜杠
+        url = url.rstrip('/')
+
+        # 如果已经包含了完整路径，移除它
+        if url.endswith('/chat/completions'):
+            url = url[:-len('/chat/completions')]
+        elif url.endswith('/v1/chat/completions'):
+            url = url[:-len('/v1/chat/completions')]
+
+        # 如果没有/v1结尾，添加它
+        if not url.endswith('/v1'):
+            url = url + '/v1'
+
+        return url
 
     def ensure_data_dir(self):
         """确保数据目录存在"""
@@ -156,22 +223,34 @@ class DailyFortunePlugin(Star):
             random.seed()  # 重置随机种子
             return result
 
+    async def _get_llm_provider(self) -> Optional[Provider]:
+        """获取LLM provider（优先使用配置的）"""
+        llm_config = self.config.get("llm", {})
+
+        # 1. 优先使用provider_id
+        if isinstance(llm_config, dict) and llm_config.get("provider_id"):
+            provider = self.context.get_provider_by_id(llm_config["provider_id"])
+            if provider:
+                return provider
+
+        # 2. 使用自定义provider
+        if self.custom_provider:
+            return self.custom_provider
+
+        # 3. 使用默认provider
+        return self.context.get_using_provider()
+
     async def generate_process_and_advice(self, event: AstrMessageEvent, user_info: Dict, jrrp: int, fortune: str) -> Tuple[str, str]:
         """通过LLM生成过程模拟和评语"""
         try:
-            # 获取配置的provider或使用默认
-            llm_config = self.config.get("llm", {})
-            provider_id = llm_config.get("provider_id") if isinstance(llm_config, dict) else None
-
-            if provider_id:
-                provider = self.context.get_provider_by_id(provider_id)
-            else:
-                provider = self.context.get_using_provider()
+            # 获取provider
+            provider = await self._get_llm_provider()
 
             if not provider:
                 return "水晶球闪烁着神秘的光芒...", "愿好运常伴你左右"
 
             # 获取人格
+            llm_config = self.config.get("llm", {})
             persona_name = llm_config.get("persona_name") if isinstance(llm_config, dict) else None
             persona_prompt = ""
 
