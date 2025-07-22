@@ -23,13 +23,12 @@ class DailyFortunePlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig = None):
         super().__init__(context)
 
-        # 现在可以安全地访问 self.metadata 了
-        self.plugin_name = "astrbot_plugin_daily_fortune1"  # 硬编码插件名，避免依赖metadata
+        # 直接使用硬编码的插件名，完全避免依赖metadata
+        plugin_name = "astrbot_plugin_daily_fortune1"
 
-        # 处理配置兼容性
+        # 处理配置
         if config is None:
-            # 如果没有传入config，尝试从文件加载
-            config_path = f"data/config/{self.plugin_name}_config.json"
+            config_path = f"data/config/{plugin_name}_config.json"
             if os.path.exists(config_path):
                 try:
                     with open(config_path, 'r', encoding='utf-8') as f:
@@ -41,7 +40,7 @@ class DailyFortunePlugin(Star):
                 config = {}
 
         self.config = config if isinstance(config, dict) else dict(config)
-        self.data_dir = f"data/plugin_data/{self.plugin_name}"
+        self.data_dir = f"data/plugin_data/{plugin_name}"
         self.ensure_data_dir()
 
         # 加载数据
