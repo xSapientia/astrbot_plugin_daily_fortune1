@@ -83,12 +83,29 @@
       "provider_id": {
         "description": "指定使用的Provider ID",
         "type": "string",
-        "hint": "留空使用默认Provider"
+        "hint": "留空使用默认Provider。如果填写了此项，下面的api_key、api_url、model可以不填"
       },
       "persona_name": {
         "description": "指定使用的人格名称",
         "type": "string",
         "hint": "留空使用默认人格"
+      },
+      "api_key": {
+        "description": "自定义OpenAI兼容API密钥",
+        "type": "string",
+        "hint": "当provider_id为空时生效。支持OpenAI、DeepSeek等兼容接口"
+      },
+      "api_url": {
+        "description": "自定义API地址",
+        "type": "string",
+        "hint": "智能识别URL格式，支持填写到/v1或/v1/chat/completions",
+        "default": ""
+      },
+      "model": {
+        "description": "使用的模型名称",
+        "type": "string",
+        "hint": "如gpt-3.5-turbo、deepseek-chat等",
+        "default": "gpt-3.5-turbo"
       }
     }
   }
