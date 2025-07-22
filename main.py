@@ -16,7 +16,7 @@ from astrbot.api.provider import ProviderRequest, LLMResponse
 
 @register(
     "astrbot_plugin_daily_fortune1", 
-    "xSapientia", 
+    "阿凌", 
     "今日人品检测插件", 
     "1.0.0", 
     "https://github.com/example/astrbot_plugin_daily_fortune1"
@@ -29,7 +29,7 @@ class DailyFortunePlugin(Star):
         self.config = config
 
         # 数据存储路径
-        self.data_dir = Path("data/plugin_data/daily_fortune")
+        self.data_dir = Path("data/plugin_data/astrbot_plugin_daily_fortune1")
         self.data_dir.mkdir(parents=True, exist_ok=True)
 
         self.fortune_file = self.data_dir / "fortune_data.json"
