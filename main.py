@@ -16,7 +16,7 @@ import astrbot.api.message_components as Comp
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "每日人品值和运势查询插件，支持排行榜和历史记录",
-    "0.0.7",
+    "0.0.1",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
@@ -42,25 +42,45 @@ class DailyFortunePlugin(Star):
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
+    def _parse_ranges_string(self, ranges_str: str) -> List[List[int]]:
+        """解析人品值分段字符串"""
+        try:
+            ranges = []
+            parts = [part.strip() for part in ranges_str.split(',')]
+            for part in parts:
+                if '-' in part:
+                    min_val, max_val = part.split('-', 1)
+                    ranges.append([int(min_val.strip()), int(max_val.strip())])
+                else:
+                    # 如果没有'-'，则认为是单个值
+                    val = int(part.strip())
+                    ranges.append([val, val])
+            return ranges
+        except Exception as e:
+            logger.error(f"[daily_fortune] 解析人品值分段失败: {e}")
+            return []
+
+    def _parse_list_string(self, list_str: str) -> List[str]:
+        """解析逗号分隔的字符串列表"""
+        try:
+            return [item.strip() for item in list_str.split(',') if item.strip()]
+        except Exception as e:
+            logger.error(f"[daily_fortune] 解析字符串列表失败: {e}")
+            return []
+
     def _init_fortune_levels(self):
         """初始化运势等级映射"""
-        # 获取配置的人品值分段
-        jrrp_ranges_config = self.config.get("jrrp_ranges", [
-            [0, 1], [2, 10], [11, 20], [21, 30], [31, 40],
-            [41, 60], [61, 80], [81, 98], [99, 100]
-        ])
+        # 获取配置的人品值分段字符串
+        jrrp_ranges_str = self.config.get("jrrp_ranges", "0-1, 2-10, 11-20, 21-30, 31-40, 41-60, 61-80, 81-98, 99-100")
+        jrrp_ranges_config = self._parse_ranges_string(jrrp_ranges_str)
 
-        # 获取配置的运势描述
-        fortune_names_config = self.config.get("fortune_names", [
-            "极凶", "大凶", "凶", "小凶", "末吉",
-            "小吉", "中吉", "大吉", "极吉"
-        ])
+        # 获取配置的运势描述字符串
+        fortune_names_str = self.config.get("fortune_names", "极凶, 大凶, 凶, 小凶, 末吉, 小吉, 中吉, 大吉, 极吉")
+        fortune_names_config = self._parse_list_string(fortune_names_str)
 
-        # 获取配置的emoji
-        fortune_emojis_config = self.config.get("fortune_emojis", [
-            "💀", "😨", "😰", "😟", "😐",
-            "🙂", "😊", "😄", "🤩"
-        ])
+        # 获取配置的emoji字符串
+        fortune_emojis_str = self.config.get("fortune_emojis", "💀, 😨, 😰, 😟, 😐, 🙂, 😊, 😄, 🤩")
+        fortune_emojis_config = self._parse_list_string(fortune_emojis_str)
 
         # 构建运势等级映射
         self.fortune_levels = {}
