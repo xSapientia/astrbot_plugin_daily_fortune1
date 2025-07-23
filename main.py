@@ -246,22 +246,43 @@ class DailyFortunePlugin(Star):
         # 尝试从rawmessage_viewer1插件获取增强信息
         try:
             if event.get_platform_name() == "aiocqhttp":
-                message_id = event.message_obj.message_id
+                # 直接从事件的raw_message获取信息，避免缓存混乱
+                raw_message = event.message_obj.raw_message
+                if isinstance(raw_message, dict):
+                    sender = raw_message.get("sender", {})
+                    if sender:
+                        # 优先使用原始消息中的信息
+                        nickname = sender.get("nickname", nickname)
+                        card = sender.get("card", "") or nickname
+                        title = sender.get("title", "") or "无"
 
-                # 查找rawmessage_viewer1插件
-                plugins = self.context.get_all_stars()
-                for plugin_meta in plugins:
-                    if plugin_meta.metadata.name == "astrbot_plugin_rawmessage_viewer1":
-                        plugin_instance = plugin_meta.instance
-                        if hasattr(plugin_instance, 'enhanced_messages'):
-                            enhanced_msg = plugin_instance.enhanced_messages.get(message_id, {})
-                            sender = enhanced_msg.get("sender", {})
-                            nickname = sender.get("nickname", nickname)
-                            card = sender.get("card", nickname)
-                            title = sender.get("title", "无")
+                        # 调试日志
+                        logger.debug(f"[daily_fortune] 从raw_message获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
+
+                # 如果raw_message中没有，再尝试从插件获取
+                if card == nickname and title == "无":
+                    message_id = event.message_obj.message_id
+                    plugins = self.context.get_all_stars()
+                    for plugin_meta in plugins:
+                        if plugin_meta.metadata.name == "astrbot_plugin_rawmessage_viewer1":
+                            plugin_instance = plugin_meta.instance
+                            if hasattr(plugin_instance, 'enhanced_messages'):
+                                enhanced_msg = plugin_instance.enhanced_messages.get(message_id, {})
+                                if enhanced_msg:
+                                    # 确保获取的是当前消息的发送者信息
+                                    msg_sender = enhanced_msg.get("sender", {})
+                                    if msg_sender.get("user_id") == int(user_id):
+                                        nickname = msg_sender.get("nickname", nickname)
+                                        card = msg_sender.get("card", nickname)
+                                        title = msg_sender.get("title", "无")
+                                        logger.debug(f"[daily_fortune] 从rawmessage_viewer1获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
                             break
         except Exception as e:
             logger.debug(f"获取增强用户信息失败: {e}")
+
+        # 确保card有值
+        if not card or card == "":
+            card = nickname
 
         return {
             "user_id": user_id,
@@ -270,7 +291,7 @@ class DailyFortunePlugin(Star):
             "title": title
         }
 
-    async def _generate_with_llm(self, prompt: str, system_prompt: str = "") -> str:
+    async def _generate_with_llm(self, prompt: str, system_prompt: str = "", user_nickname: str = "") -> str:
         """使用LLM生成内容"""
         try:
             provider = self.provider or self.context.get_using_provider()
@@ -279,6 +300,10 @@ class DailyFortunePlugin(Star):
 
             # 获取当前会话的人格信息
             contexts = []
+
+            # 在prompt中明确指定用户昵称，避免混乱
+            if user_nickname:
+                prompt = f"用户昵称是'{user_nickname}'。{prompt}"
 
             # 处理system_prompt - 某些模型可能不支持
             try:
@@ -371,17 +396,17 @@ class DailyFortunePlugin(Star):
             "femoji": femoji
         }
 
-        # 生成过程模拟
+        # 生成过程模拟（传入用户昵称）
         process_prompt = self.config.get("prompts", {}).get("process",
             "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
         process_prompt = process_prompt.format(**vars_dict)
-        process = await self._generate_with_llm(process_prompt)
+        process = await self._generate_with_llm(process_prompt, user_nickname=nickname)
 
-        # 生成建议
+        # 生成建议（传入用户昵称）
         advice_prompt = self.config.get("prompts", {}).get("advice",
             "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
         advice_prompt = advice_prompt.format(**vars_dict)
-        advice = await self._generate_with_llm(advice_prompt)
+        advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
 
         # 构建结果
         result_template = self.config.get("templates", {}).get("random",
