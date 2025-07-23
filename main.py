@@ -16,7 +16,7 @@ import astrbot.api.message_components as Comp
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "每日人品值和运势查询插件，支持排行榜和历史记录",
-    "0.0.1",
+    "0.0.7",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
@@ -34,23 +34,63 @@ class DailyFortunePlugin(Star):
         self.daily_data = self._load_data(self.fortune_file)
         self.history_data = self._load_data(self.history_file)
 
-        # 运势等级映射
-        self.fortune_levels = {
-            (0, 1): ("极凶", "💀"),
-            (2, 10): ("大凶", "😨"),
-            (11, 20): ("凶", "😰"),
-            (21, 30): ("小凶", "😟"),
-            (31, 40): ("末吉", "😐"),
-            (41, 60): ("小吉", "🙂"),
-            (61, 80): ("中吉", "😊"),
-            (81, 98): ("大吉", "😄"),
-            (99, 100): ("极吉", "🤩")
-        }
+        # 初始化运势等级映射
+        self._init_fortune_levels()
 
         # 初始化LLM提供商
         self._init_provider()
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
+
+    def _init_fortune_levels(self):
+        """初始化运势等级映射"""
+        # 获取配置的人品值分段
+        jrrp_ranges_config = self.config.get("jrrp_ranges", [
+            [0, 1], [2, 10], [11, 20], [21, 30], [31, 40],
+            [41, 60], [61, 80], [81, 98], [99, 100]
+        ])
+
+        # 获取配置的运势描述
+        fortune_names_config = self.config.get("fortune_names", [
+            "极凶", "大凶", "凶", "小凶", "末吉",
+            "小吉", "中吉", "大吉", "极吉"
+        ])
+
+        # 获取配置的emoji
+        fortune_emojis_config = self.config.get("fortune_emojis", [
+            "💀", "😨", "😰", "😟", "😐",
+            "🙂", "😊", "😄", "🤩"
+        ])
+
+        # 构建运势等级映射
+        self.fortune_levels = {}
+
+        for i, range_config in enumerate(jrrp_ranges_config):
+            if len(range_config) >= 2:
+                min_val = int(range_config[0])
+                max_val = int(range_config[1])
+
+                # 获取对应的运势描述和emoji，如果超出范围则使用默认值
+                fortune_name = fortune_names_config[i] if i < len(fortune_names_config) else "未知"
+                fortune_emoji = fortune_emojis_config[i] if i < len(fortune_emojis_config) else "❓"
+
+                self.fortune_levels[(min_val, max_val)] = (fortune_name, fortune_emoji)
+
+        # 如果配置为空或无效，使用默认配置
+        if not self.fortune_levels:
+            self.fortune_levels = {
+                (0, 1): ("极凶", "💀"),
+                (2, 10): ("大凶", "😨"),
+                (11, 20): ("凶", "😰"),
+                (21, 30): ("小凶", "😟"),
+                (31, 40): ("末吉", "😐"),
+                (41, 60): ("小吉", "🙂"),
+                (61, 80): ("中吉", "😊"),
+                (81, 98): ("大吉", "😄"),
+                (99, 100): ("极吉", "🤩")
+            }
+
+        logger.info(f"[daily_fortune] 运势等级映射已初始化，共 {len(self.fortune_levels)} 个等级")
 
     def _init_provider(self):
         """初始化LLM提供商"""
@@ -231,36 +271,38 @@ class DailyFortunePlugin(Star):
 
     def _get_fortune_info(self, jrrp: int) -> tuple:
         """根据人品值获取运势信息"""
+        # 按照配置的分段从左到右匹配
         for (min_val, max_val), (fortune, emoji) in self.fortune_levels.items():
             if min_val <= jrrp <= max_val:
                 return fortune, emoji
         return "未知", "❓"
 
-    async def _get_user_info(self, event: AstrMessageEvent) -> Dict[str, str]:
+    async def _get_user_info(self, event: AstrMessageEvent, target_user_id: str = None) -> Dict[str, str]:
         """获取用户信息（从rawmessage_viewer1插件）"""
-        user_id = event.get_sender_id()
-        nickname = event.get_sender_name()
+        user_id = target_user_id or event.get_sender_id()
+        nickname = event.get_sender_name() if not target_user_id else f"用户{target_user_id}"
         card = nickname  # 默认值
         title = "无"  # 默认值
 
         # 尝试从rawmessage_viewer1插件获取增强信息
         try:
             if event.get_platform_name() == "aiocqhttp":
-                # 直接从事件的raw_message获取信息，避免缓存混乱
-                raw_message = event.message_obj.raw_message
-                if isinstance(raw_message, dict):
-                    sender = raw_message.get("sender", {})
-                    if sender:
-                        # 优先使用原始消息中的信息
-                        nickname = sender.get("nickname", nickname)
-                        card = sender.get("card", "") or nickname
-                        title = sender.get("title", "") or "无"
+                # 如果是查询自己，直接从事件的raw_message获取信息
+                if not target_user_id:
+                    raw_message = event.message_obj.raw_message
+                    if isinstance(raw_message, dict):
+                        sender = raw_message.get("sender", {})
+                        if sender:
+                            # 优先使用原始消息中的信息
+                            nickname = sender.get("nickname", nickname)
+                            card = sender.get("card", "") or nickname
+                            title = sender.get("title", "") or "无"
 
-                        # 调试日志
-                        logger.debug(f"[daily_fortune] 从raw_message获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
+                            # 调试日志
+                            logger.debug(f"[daily_fortune] 从raw_message获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
 
-                # 如果raw_message中没有，再尝试从插件获取
-                if card == nickname and title == "无":
+                # 如果raw_message中没有，或者是查询他人，再尝试从插件获取
+                if (card == nickname and title == "无") or target_user_id:
                     message_id = event.message_obj.message_id
                     plugins = self.context.get_all_stars()
                     for plugin_meta in plugins:
@@ -269,13 +311,26 @@ class DailyFortunePlugin(Star):
                             if hasattr(plugin_instance, 'enhanced_messages'):
                                 enhanced_msg = plugin_instance.enhanced_messages.get(message_id, {})
                                 if enhanced_msg:
-                                    # 确保获取的是当前消息的发送者信息
-                                    msg_sender = enhanced_msg.get("sender", {})
-                                    if msg_sender.get("user_id") == int(user_id):
-                                        nickname = msg_sender.get("nickname", nickname)
-                                        card = msg_sender.get("card", nickname)
-                                        title = msg_sender.get("title", "无")
-                                        logger.debug(f"[daily_fortune] 从rawmessage_viewer1获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
+                                    # 如果是查询自己，确保获取的是当前消息的发送者信息
+                                    if not target_user_id:
+                                        msg_sender = enhanced_msg.get("sender", {})
+                                        if msg_sender.get("user_id") == int(user_id):
+                                            nickname = msg_sender.get("nickname", nickname)
+                                            card = msg_sender.get("card", nickname)
+                                            title = msg_sender.get("title", "无")
+                                            logger.debug(f"[daily_fortune] 从rawmessage_viewer1获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
+                                    else:
+                                        # 查询他人时，尝试从@信息中获取
+                                        for i in range(1, 10):  # 检查ater1到ater9
+                                            ater_key = f"ater{i}"
+                                            if ater_key in enhanced_msg:
+                                                ater_info = enhanced_msg[ater_key]
+                                                if str(ater_info.get("user_id")) == str(target_user_id):
+                                                    nickname = ater_info.get("nickname", nickname)
+                                                    card = ater_info.get("card", nickname)
+                                                    title = ater_info.get("title", "无")
+                                                    logger.debug(f"[daily_fortune] 从ater信息获取用户信息: user_id={user_id}, nickname={nickname}, card={card}, title={title}")
+                                                    break
                             break
         except Exception as e:
             logger.debug(f"获取增强用户信息失败: {e}")
@@ -294,8 +349,18 @@ class DailyFortunePlugin(Star):
     async def _generate_with_llm(self, prompt: str, system_prompt: str = "", user_nickname: str = "") -> str:
         """使用LLM生成内容"""
         try:
-            provider = self.provider or self.context.get_using_provider()
+            # 优先使用默认provider，如果配置的provider不可用
+            provider = self.context.get_using_provider()
+            if not provider and self.provider:
+                provider = self.provider
+
             if not provider:
+                logger.warning("[daily_fortune] 没有可用的LLM提供商")
+                # 返回备用响应
+                if "过程" in prompt:
+                    return "水晶球中浮现出神秘的光芒..."
+                elif "建议" in prompt:
+                    return "保持乐观的心态，好运自然来。"
                 return "LLM服务暂时不可用"
 
             # 获取当前会话的人格信息
@@ -325,12 +390,21 @@ class DailyFortunePlugin(Star):
                 # 如果system_prompt导致错误，尝试将其合并到prompt中
                 logger.debug(f"使用system_prompt失败，尝试合并到prompt: {e}")
                 combined_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
-                response = await provider.text_chat(
-                    prompt=combined_prompt,
-                    contexts=contexts
-                )
+                try:
+                    response = await provider.text_chat(
+                        prompt=combined_prompt,
+                        contexts=contexts
+                    )
+                except Exception as e2:
+                    logger.error(f"LLM调用完全失败: {e2}")
+                    # 返回备用响应
+                    if "过程" in prompt:
+                        return "水晶球中浮现出神秘的光芒..."
+                    elif "建议" in prompt:
+                        return "保持乐观的心态，好运自然来。"
+                    return "生成失败"
 
-            return response.completion_text
+            return response.completion_text if response else "生成失败"
         except Exception as e:
             logger.error(f"LLM生成失败: {e}")
             # 返回备用响应
@@ -343,6 +417,101 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent):
         """今日人品查询"""
+        # 检查是否有@某人
+        target_user_id = None
+        target_nickname = None
+
+        # 检查消息中是否有At
+        for comp in event.message_obj.message:
+            if isinstance(comp, Comp.At):
+                target_user_id = str(comp.qq)
+                target_nickname = f"用户{target_user_id}"
+                break
+
+        # 如果是查询他人
+        if target_user_id:
+            today = self._get_today_key()
+            sender_info = await self._get_user_info(event)
+            sender_nickname = sender_info["nickname"]
+
+            # 获取被查询者的用户信息
+            target_user_info = await self._get_user_info(event, target_user_id)
+            target_nickname = target_user_info["nickname"]
+
+            # 检查对方是否已经查询过
+            if today not in self.daily_data or target_user_id not in self.daily_data[today]:
+                # 使用配置的未查询提示信息，支持所有变量
+                not_queried_template = self.config.get("others_not_queried_message",
+                    "{target_nickname} 今天还没有查询过人品值呢~")
+
+                # 准备变量字典，包含所有可能的变量
+                vars_dict = {
+                    "target_nickname": target_nickname,
+                    "target_user_id": target_user_id,
+                    "sender_nickname": sender_nickname,
+                    "nickname": target_nickname,  # 兼容原有变量
+                    "card": target_user_info["card"],
+                    "title": target_user_info["title"],
+                    "date": today,
+                    # 由于对方未查询，这些值为空或默认值
+                    "jrrp": "未知",
+                    "fortune": "未知",
+                    "femoji": "❓",
+                    "process": "",
+                    "advice": "",
+                    "avgjrrp": 0,
+                    "maxjrrp": 0,
+                    "minjrrp": 0,
+                    "ranks": "",
+                    "medal": ""
+                }
+
+                result = not_queried_template.format(**vars_dict)
+                yield event.plain_result(result)
+                return
+
+            # 获取对方的查询结果
+            cached = self.daily_data[today][target_user_id]
+            jrrp = cached["jrrp"]
+            fortune, femoji = self._get_fortune_info(jrrp)
+            target_nickname = cached.get("nickname", target_nickname)
+
+            # 构建查询模板，支持所有变量
+            query_template = self.config.get("templates", {}).get("query",
+                "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
+
+            # 准备变量字典
+            vars_dict = {
+                "nickname": target_nickname,
+                "card": target_user_info["card"],
+                "title": target_user_info["title"],
+                "jrrp": jrrp,
+                "fortune": fortune,
+                "femoji": femoji,
+                "date": today,
+                "process": cached.get("process", ""),
+                "advice": cached.get("advice", ""),
+                "target_nickname": target_nickname,
+                "target_user_id": target_user_id,
+                "sender_nickname": sender_nickname,
+                # 统计信息（如果需要的话）
+                "avgjrrp": jrrp,  # 单个用户的平均值就是当前值
+                "maxjrrp": jrrp,
+                "minjrrp": jrrp,
+                "ranks": "",
+                "medal": ""
+            }
+
+            result = query_template.format(**vars_dict)
+
+            # 检查是否显示对方的缓存完整结果
+            if self.config.get("show_others_cached_result", False) and "result" in cached:
+                result += f"\n\n-----以下为{target_nickname}的今日运势测算场景还原-----\n{cached['result']}"
+
+            yield event.plain_result(result)
+            return
+
+        # 查询自己的人品（原有逻辑保持不变）
         user_info = await self._get_user_info(event)
         user_id = user_info["user_id"]
         nickname = user_info["nickname"]
@@ -363,12 +532,26 @@ class DailyFortunePlugin(Star):
             query_template = self.config.get("templates", {}).get("query",
                 "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
 
-            result = query_template.format(
-                nickname=nickname,
-                jrrp=jrrp,
-                fortune=fortune,
-                femoji=femoji
-            )
+            # 准备变量字典
+            vars_dict = {
+                "nickname": nickname,
+                "card": user_info["card"],
+                "title": user_info["title"],
+                "jrrp": jrrp,
+                "fortune": fortune,
+                "femoji": femoji,
+                "date": today,
+                "process": cached.get("process", ""),
+                "advice": cached.get("advice", ""),
+                # 统计信息
+                "avgjrrp": jrrp,
+                "maxjrrp": jrrp,
+                "minjrrp": jrrp,
+                "ranks": "",
+                "medal": ""
+            }
+
+            result = query_template.format(**vars_dict)
 
             # 如果配置启用了显示缓存结果
             if self.config.get("show_cached_result", True) and "result" in cached:
