@@ -2,8 +2,8 @@
   "jrrp_algorithm": {
     "description": "人品值随机算法",
     "type": "string",
-    "default": "hash",
-    "options": ["hash", "random", "normal", "lucky", "challenge"],
+    "default": "random",
+    "options": ["random", "hash", "normal", "lucky", "challenge"],
     "hint": "hash: 基于用户ID和日期的哈希算法; random: 纯随机; normal: 正态分布(中间值概率高); lucky: 幸运算法(高分概率高); challenge: 挑战算法(极端值概率高)"
   },
   "jrrp_ranges": {
@@ -46,7 +46,7 @@
     "description": "@查询他人但对方未查询时的提示信息",
     "type": "string",
     "default": "{target_nickname} 今天还没有查询过人品值呢~",
-    "hint": "支持变量: {target_nickname}, {target_user_id}, {sender_nickname}, {nickname}, {card}, {title}, {date}, {jrrp}, {fortune}, {femoji}, {process}, {advice}, {avgjrrp}, {maxjrrp}, {minjrrp}, {ranks}, {medal}"
+    "hint": "支持变量: {target_nickname}, {target_user_id}, {sender_nickname}, {nickname}, {card}, {title}, {date}, {jrrp}, {fortune}, {femoji}, {process}, {advice}, {avgjrrp}, {maxjrrp}, {minjrrp}, {ranks}, {medal}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
   },
   "history_days": {
     "description": "个人历史记录计算与缓存天数",
@@ -96,13 +96,13 @@
         "description": "过程模拟提示词",
         "type": "text",
         "default": "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
-        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}"
+        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
       },
       "advice": {
         "description": "评语建议提示词",
         "type": "text",
-        "default": "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内",
-        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}"
+        "default": "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内",
+        "hint": "支持变量: {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
       }
     }
   },
@@ -121,6 +121,12 @@
         "type": "text",
         "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
         "hint": "支持变量: {nickname}, {jrrp}, {fortune}, {femoji}"
+      },
+      "medals": {
+      "description": "排行榜奖牌配置",
+      "type": "string",
+      "default": "🥇, 🥈, 🥉, 🏅, 🏅",
+      "hint": "排行榜奖牌列表，用逗号分隔，超出配置数量的名次将使用最后一个奖牌"
       },
       "rank": {
         "description": "排行榜条目模板",

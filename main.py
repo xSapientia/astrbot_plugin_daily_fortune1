@@ -16,7 +16,7 @@ import astrbot.api.message_components as Comp
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "每日人品值和运势查询插件，支持排行榜和历史记录",
-    "0.0.1",
+    "0.0.8",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
@@ -36,6 +36,9 @@ class DailyFortunePlugin(Star):
 
         # 初始化运势等级映射
         self._init_fortune_levels()
+
+        # 初始化奖牌配置
+        self._init_medals()
 
         # 初始化LLM提供商
         self._init_provider()
@@ -82,6 +85,11 @@ class DailyFortunePlugin(Star):
         fortune_emojis_str = self.config.get("fortune_emojis", "💀, 😨, 😰, 😟, 😐, 🙂, 😊, 😄, 🤩")
         fortune_emojis_config = self._parse_list_string(fortune_emojis_str)
 
+        # 保存配置字符串供模板使用
+        self.jrrp_ranges_str = jrrp_ranges_str
+        self.fortune_names_str = fortune_names_str
+        self.fortune_emojis_str = fortune_emojis_str
+
         # 构建运势等级映射
         self.fortune_levels = {}
 
@@ -111,6 +119,18 @@ class DailyFortunePlugin(Star):
             }
 
         logger.info(f"[daily_fortune] 运势等级映射已初始化，共 {len(self.fortune_levels)} 个等级")
+
+    def _init_medals(self):
+        """初始化奖牌配置"""
+        medals_str = self.config.get("medals", "🥇, 🥈, 🥉, 🏅, 🏅")
+        self.medals = self._parse_list_string(medals_str)
+
+        # 如果配置为空，使用默认值
+        if not self.medals:
+            self.medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
+
+        self.medals_str = medals_str
+        logger.info(f"[daily_fortune] 奖牌配置已初始化，共 {len(self.medals)} 个奖牌")
 
     def _init_provider(self):
         """初始化LLM提供商"""
@@ -238,6 +258,14 @@ class DailyFortunePlugin(Star):
     def _get_today_key(self) -> str:
         """获取今日日期作为key"""
         return date.today().strftime("%Y-%m-%d")
+
+    def _reset_random_seeds(self):
+        """重置随机种子"""
+        # 重置Python内置random模块的种子
+        random.seed()
+        # 重置numpy的随机种子
+        np.random.seed()
+        logger.info("[daily_fortune] 已重置随机种子")
 
     def _calculate_jrrp(self, user_id: str) -> int:
         """计算今日人品值"""
@@ -435,8 +463,78 @@ class DailyFortunePlugin(Star):
             return "生成失败"
 
     @filter.command("jrrp")
-    async def jrrp(self, event: AstrMessageEvent):
+    async def jrrp(self, event: AstrMessageEvent, subcommand: str = ""):
         """今日人品查询"""
+        # 处理help子命令
+        if subcommand.lower() == "help":
+            help_text = """📖 每日人品插件指令帮助
+
+    🎲 基础指令：
+    • 查询自己的今日人品值
+        - jrrp
+    • 查询他人的今日人品值
+        - jrrp @某人
+    • 显示帮助信息
+        - jrrp help
+
+    📊 排行榜：
+    • 查看群内今日人品排行榜
+        - jrrp rank
+        - jrrprank
+
+    📚 历史记录：
+    • 查看历史记录
+        - jrrp history
+        - jrrp hi
+        - jrrphistory
+        - jrrphi
+    • 查看他人历史记录
+        - jrrp history @某人
+        - jrrphistory @某人
+
+    🗑️ 数据管理：
+    • 删除除今日外的历史记录
+        - jrrp delete --confirm
+        - jrrp del --confirm
+        - jrrpdelete --confirm
+        - jrrpdel --confirm
+    • 删除他人历史记录（需管理员权限）
+        - jrrp delete @某人 --confirm
+        - jrrpdelete @某人 --confirm
+
+    ⚙️ 管理员指令：
+    • 初始化今日记录
+        - jrrp init --confirm
+        - jrrp initialize --confirm
+        - jrrpinit --confirm
+        - jrrpinitialize --confirm
+    • 重置所有数据
+        - jrrp reset --confirm
+        - jrrp re --confirm
+        - jrrpreset --confirm
+        - jrrpre --confirm
+
+    💡 提示：带 --confirm 的指令需要确认参数才能执行"""
+            yield event.plain_result(help_text)
+            return
+
+        # 处理其他子命令
+        if subcommand.lower() == "rank":
+            await self.jrrprank(event)
+            return
+        elif subcommand.lower() in ["history", "hi"]:
+            await self.jrrphistory(event)
+            return
+        elif subcommand.lower() in ["delete", "del"]:
+            await self.jrrpdelete(event, "")
+            return
+        elif subcommand.lower() in ["init", "initialize"]:
+            await self.jrrpinitialize(event, "")
+            return
+        elif subcommand.lower() in ["reset", "re"]:
+            await self.jrrpreset(event, "")
+            return
+
         # 检查是否有@某人
         target_user_id = None
         target_nickname = None
@@ -483,7 +581,11 @@ class DailyFortunePlugin(Star):
                     "maxjrrp": 0,
                     "minjrrp": 0,
                     "ranks": "",
-                    "medal": ""
+                    "medal": "",
+                    "medals": self.medals_str,
+                    "jrrp_ranges": self.jrrp_ranges_str,
+                    "fortune_names": self.fortune_names_str,
+                    "fortune_emojis": self.fortune_emojis_str
                 }
 
                 result = not_queried_template.format(**vars_dict)
@@ -519,7 +621,11 @@ class DailyFortunePlugin(Star):
                 "maxjrrp": jrrp,
                 "minjrrp": jrrp,
                 "ranks": "",
-                "medal": ""
+                "medal": "",
+                "medals": self.medals_str,
+                "jrrp_ranges": self.jrrp_ranges_str,
+                "fortune_names": self.fortune_names_str,
+                "fortune_emojis": self.fortune_emojis_str
             }
 
             result = query_template.format(**vars_dict)
@@ -568,7 +674,11 @@ class DailyFortunePlugin(Star):
                 "maxjrrp": jrrp,
                 "minjrrp": jrrp,
                 "ranks": "",
-                "medal": ""
+                "medal": "",
+                "medals": self.medals_str,
+                "jrrp_ranges": self.jrrp_ranges_str,
+                "fortune_names": self.fortune_names_str,
+                "fortune_emojis": self.fortune_emojis_str
             }
 
             result = query_template.format(**vars_dict)
@@ -596,7 +706,11 @@ class DailyFortunePlugin(Star):
             "title": user_info["title"],
             "jrrp": jrrp,
             "fortune": fortune,
-            "femoji": femoji
+            "femoji": femoji,
+            "medals": self.medals_str,
+            "jrrp_ranges": self.jrrp_ranges_str,
+            "fortune_names": self.fortune_names_str,
+            "fortune_emojis": self.fortune_emojis_str
         }
 
         # 生成过程模拟（传入用户昵称）
@@ -607,7 +721,7 @@ class DailyFortunePlugin(Star):
 
         # 生成建议（传入用户昵称）
         advice_prompt = self.config.get("prompts", {}).get("advice",
-            "使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
+            "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
         advice_prompt = advice_prompt.format(**vars_dict)
         advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
 
@@ -679,10 +793,9 @@ class DailyFortunePlugin(Star):
             "{medal} {nickname}: {jrrp} ({fortune})")
 
         ranks = []
-        medals = ["🥇", "🥈", "🥉", "🏅", "🏅"]
 
         for i, user in enumerate(group_data[:10]):  # 只显示前10名
-            medal = medals[i] if i < len(medals) else "🏅"
+            medal = self.medals[i] if i < len(self.medals) else self.medals[-1] if self.medals else "🏅"
             rank_line = rank_template.format(
                 medal=medal,
                 nickname=user["nickname"],
@@ -714,7 +827,8 @@ class DailyFortunePlugin(Star):
             if isinstance(comp, Comp.At):
                 target_user_id = str(comp.qq)
                 # 尝试获取被@用户的昵称
-                target_nickname = f"用户{target_user_id}"
+                target_user_info = await self._get_user_info(event, target_user_id)
+                target_nickname = target_user_info["nickname"]
                 break
 
         if target_user_id not in self.history_data:
@@ -759,31 +873,140 @@ class DailyFortunePlugin(Star):
         yield event.plain_result(result)
 
     @filter.command("jrrpdelete", alias={"jrrpdel"})
-    async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = ""):
-        """删除个人人品历史记录"""
-        user_id = event.get_sender_id()
+    async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
+        """删除个人人品历史记录（保留今日）"""
+        # 处理 /jrrp delete --confirm 的情况，参数可能在不同位置
+        if confirm != "--confirm" and target_confirm == "--confirm":
+            confirm = "--confirm"
+
+        # 检查是否有@某人
+        target_user_id = event.get_sender_id()
+        target_nickname = event.get_sender_name()
+        is_target_others = False
+
+        # 检查消息中是否有At
+        for comp in event.message_obj.message:
+            if isinstance(comp, Comp.At):
+                target_user_id = str(comp.qq)
+                target_user_info = await self._get_user_info(event, target_user_id)
+                target_nickname = target_user_info["nickname"]
+                is_target_others = True
+                break
+
+        # 如果是@他人，需要管理员权限
+        if is_target_others:
+            # 检查是否为管理员
+            sender_id = event.get_sender_id()
+            astrbot_config = self.context.get_config()
+            admins = astrbot_config.get('admins', [])
+            if sender_id not in admins:
+                yield event.plain_result("❌ 删除他人数据需要管理员权限")
+                return
 
         if confirm != "--confirm":
-            yield event.plain_result("⚠️ 警告：此操作将删除您的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
+            action_desc = f"删除 {target_nickname} 的" if is_target_others else "删除您的"
+            yield event.plain_result(f"⚠️ 警告：此操作将{action_desc}除今日以外的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
             return
 
-        # 删除历史记录
-        if user_id in self.history_data:
-            del self.history_data[user_id]
+        today = self._get_today_key()
+        deleted_count = 0
+
+        # 删除历史记录（保留今日）
+        if target_user_id in self.history_data:
+            user_history = self.history_data[target_user_id]
+            dates_to_delete = [date for date in user_history.keys() if date != today]
+            for date in dates_to_delete:
+                del user_history[date]
+                deleted_count += 1
+
+            # 如果历史记录为空，删除整个用户记录
+            if not user_history:
+                del self.history_data[target_user_id]
+
             self._save_data(self.history_data, self.history_file)
 
-        # 删除今日记录
+        # 删除每日记录（保留今日）
+        dates_to_delete = [date for date in self.daily_data.keys() if date != today]
+        for date in dates_to_delete:
+            if target_user_id in self.daily_data[date]:
+                del self.daily_data[date][target_user_id]
+                deleted_count += 1
+            # 如果该日期没有任何用户数据，删除整个日期记录
+            if not self.daily_data[date]:
+                del self.daily_data[date]
+
+        self._save_data(self.daily_data, self.fortune_file)
+
+        action_desc = f"{target_nickname} 的" if is_target_others else "您的"
+        yield event.plain_result(f"✅ 已删除 {action_desc}除今日以外的人品历史记录（共 {deleted_count} 条）")
+
+
+    @filter.command("jrrpinitialize", alias={"jrrpinit"})
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    async def jrrpinitialize(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
+        """初始化今日人品记录（仅管理员）"""
+        # 处理 /jrrp init --confirm 的情况，参数可能在不同位置
+        if confirm != "--confirm" and target_confirm == "--confirm":
+            confirm = "--confirm"
+
+        # 检查是否有@某人
+        target_user_id = event.get_sender_id()
+        target_nickname = event.get_sender_name()
+        is_target_others = False
+
+        # 检查消息中是否有At
+        for comp in event.message_obj.message:
+            if isinstance(comp, Comp.At):
+                target_user_id = str(comp.qq)
+                target_user_info = await self._get_user_info(event, target_user_id)
+                target_nickname = target_user_info["nickname"]
+                is_target_others = True
+                break
+
+        if confirm != "--confirm":
+            action_desc = f"{target_nickname} 的" if is_target_others else "您的"
+            yield event.plain_result(f"⚠️ 警告：此操作将删除 {action_desc}今日人品记录，使其可以重新随机！\n如确认初始化，请使用：/jrrpinit --confirm")
+            return
+
         today = self._get_today_key()
-        if today in self.daily_data and user_id in self.daily_data[today]:
-            del self.daily_data[today][user_id]
+        deleted = False
+
+        # 删除今日记录
+        if today in self.daily_data and target_user_id in self.daily_data[today]:
+            del self.daily_data[today][target_user_id]
+            deleted = True
+            # 如果该日期没有任何用户数据，删除整个日期记录
+            if not self.daily_data[today]:
+                del self.daily_data[today]
             self._save_data(self.daily_data, self.fortune_file)
 
-        yield event.plain_result("✅ 您的人品历史记录已成功删除")
+        # 删除今日历史记录
+        if target_user_id in self.history_data and today in self.history_data[target_user_id]:
+            del self.history_data[target_user_id][today]
+            deleted = True
+            # 如果历史记录为空，删除整个用户记录
+            if not self.history_data[target_user_id]:
+                del self.history_data[target_user_id]
+            self._save_data(self.history_data, self.history_file)
+
+        # 重置随机种子
+        if deleted:
+            self._reset_random_seeds()
+
+        action_desc = f"{target_nickname} 的" if is_target_others else "您的"
+        if deleted:
+            yield event.plain_result(f"✅ 已初始化 {action_desc}今日人品记录，现在可以重新使用 /jrrp 随机人品值了")
+        else:
+            yield event.plain_result(f"ℹ️ {action_desc}今日还没有人品记录，无需初始化")
 
     @filter.command("jrrpreset", alias={"jrrpre"})
     @filter.permission_type(filter.PermissionType.ADMIN)
-    async def jrrpreset(self, event: AstrMessageEvent, confirm: str = ""):
+    async def jrrpreset(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
         """重置所有人品数据（仅管理员）"""
+        # 处理 /jrrp reset --confirm 的情况，参数可能在不同位置
+        if confirm != "--confirm" and target_confirm == "--confirm":
+            confirm = "--confirm"
+
         if confirm != "--confirm":
             yield event.plain_result("⚠️ 警告：此操作将删除所有用户的人品数据！\n如确认重置，请使用：/jrrpreset --confirm")
             return
@@ -793,6 +1016,9 @@ class DailyFortunePlugin(Star):
         self.history_data = {}
         self._save_data(self.daily_data, self.fortune_file)
         self._save_data(self.history_data, self.history_file)
+
+        # 重置随机种子
+        self._reset_random_seeds()
 
         yield event.plain_result("✅ 所有人品数据已重置")
 
