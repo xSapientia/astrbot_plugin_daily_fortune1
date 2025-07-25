@@ -119,7 +119,7 @@
       "random": {
         "description": "首次查询结果模板",
         "type": "text",
-        "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}。",
+        "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}",
         "hint": "支持变量: {process}, {jrrp}, {fortune}, {advice}"
       },
       "query": {
