@@ -283,25 +283,43 @@ class DailyFortunePlugin(Star):
         """测试provider连接"""
         try:
             if self.provider:
-                name, provider_id_attr, provider_type, model = self._get_provider_info(self.provider)
+                # 从AstrBot配置中获取用户自定义的provider名称
+                provider_display_name = self._get_provider_display_name()
                 
-                logger.debug(
-                    f"Attempting to check provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
-                )
-                
-                logger.debug(f"Sending 'Ping' to provider: {name}")
+                logger.debug(f"Sending 'Ping' to provider: {provider_display_name}")
                 response = await asyncio.wait_for(
                     self.provider.text_chat(prompt="REPLY `PONG` ONLY"), timeout=45.0
                 )
-                logger.debug(f"Received response from {name}: {response}")
+                logger.debug(f"Received response from {provider_display_name}: {response}")
                 
                 if response and response.completion_text:
-                    logger.info(f"[daily_fortune] Provider连接测试成功: {name}")
+                    logger.info(f"[daily_fortune] Provider连接测试成功: {provider_display_name}")
                 else:
-                    logger.warning(f"[daily_fortune] Provider连接测试失败：无响应 - {name}")
+                    logger.warning(f"[daily_fortune] Provider连接测试失败：无响应 - {provider_display_name}")
         except Exception as e:
-            name, _, _, _ = self._get_provider_info(self.provider) if self.provider else ('Unknown', '', '', '')
-            logger.error(f"[daily_fortune] Provider连接测试失败: {name} - {e}")
+            provider_display_name = self._get_provider_display_name()
+            logger.error(f"[daily_fortune] Provider连接测试失败: {provider_display_name} - {e}")
+
+    def _get_provider_display_name(self):
+        """获取用户配置的provider显示名称"""
+        try:
+            # 从AstrBot的配置中获取用户设置的provider名称
+            astrbot_config = self.context.get_config()
+            providers_config = astrbot_config.get('providers', [])
+            
+            # 查找当前使用的provider配置
+            current_provider_id = astrbot_config.get('llm_provider_id', '')
+            
+            for provider_config in providers_config:
+                if provider_config.get('id') == current_provider_id:
+                    # 优先使用用户自定义的名称
+                    return provider_config.get('name', provider_config.get('id', 'Unknown'))
+            
+            # 如果没有找到，返回默认名称
+            return current_provider_id or 'Unknown'
+        except Exception as e:
+            logger.debug(f"获取provider显示名称失败: {e}")
+            return 'Unknown'
 
     async def _test_third_party_api(self, api_config):
         """测试第三方API连接"""
