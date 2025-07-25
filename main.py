@@ -138,20 +138,55 @@ class DailyFortunePlugin(Star):
     def _get_provider_info(self, provider):
         """获取provider详细信息的辅助方法"""
         try:
-            # 尝试多种属性获取名称，优先使用友好名称
+            # 尝试多种属性获取名称，优先使用用户自定义的备注名称
             name = None
             
-            # 先尝试获取用户自定义的名称
-            if hasattr(provider, 'nickname') and provider.nickname:
-                name = provider.nickname
-            elif hasattr(provider, 'display_name') and provider.display_name:
-                name = provider.display_name
-            elif hasattr(provider, 'provider_name') and provider.provider_name:
-                name = provider.provider_name
-            elif hasattr(provider, 'name') and provider.name:
-                name = provider.name
+            # 尝试获取用户自定义的备注名称（可能的属性名）
+            possible_custom_name_attrs = [
+                'alias', 'custom_name', 'user_name', 'remark', 'comment', 
+                'label', 'config_name', 'nickname', 'display_name', 'title',
+                'friendly_name', 'custom_alias', 'user_alias', 'description'
+            ]
             
-            # 如果都没有，尝试从类名推断
+            for attr in possible_custom_name_attrs:
+                if hasattr(provider, attr):
+                    value = getattr(provider, attr, None)
+                    if value and str(value).strip():
+                        name = str(value).strip()
+                        break
+            
+            # 如果还没有找到，尝试从配置对象中获取
+            if not name and hasattr(provider, 'config'):
+                config = getattr(provider, 'config', {})
+                if isinstance(config, dict):
+                    for key in ['name', 'alias', 'custom_name', 'nickname', 'display_name', 'title', 'label']:
+                        if key in config and config[key]:
+                            name = str(config[key]).strip()
+                            break
+            
+            # 尝试其他可能的嵌套属性
+            if not name:
+                for attr_path in ['settings.name', 'meta.name', 'info.name', 'data.name']:
+                    try:
+                        obj = provider
+                        for part in attr_path.split('.'):
+                            obj = getattr(obj, part, None)
+                            if obj is None:
+                                break
+                        if obj and str(obj).strip():
+                            name = str(obj).strip()
+                            break
+                    except:
+                        continue
+            
+            # 如果仍然没有找到，使用标准属性
+            if not name:
+                if hasattr(provider, 'provider_name') and provider.provider_name:
+                    name = provider.provider_name
+                elif hasattr(provider, 'name') and provider.name:
+                    name = provider.name
+            
+            # 最后从类名推断
             if not name:
                 class_name = provider.__class__.__name__
                 if 'OpenAI' in class_name:
