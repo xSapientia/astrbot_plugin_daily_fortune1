@@ -695,8 +695,9 @@ class DailyFortunePlugin(Star):
 
         # 检查用户是否正在处理中
         if user_id in self.processing_users:
-            # 用户正在处理中，返回正在检测中的消息
+            # 用户正在处理中，彻底阻止事件传播和LLM调用
             event.should_call_llm(False)
+            event.stop_event()
             processing_msg = self.config.get("processing_message",
                 "已经在努力获取 {nickname} 的命运了哦~")
             yield event.plain_result(processing_msg.format(nickname=nickname))
