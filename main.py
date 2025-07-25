@@ -312,7 +312,7 @@ class DailyFortunePlugin(Star):
                 # 普通值
                 return random.randint(21, 79)
         else:
-            # 纯随机算法（添加时间变量实现真随机）
+            # 默认使用random算法
             current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
             seed = f"{user_id}_{today}_{current_time}"
             random.seed(seed)
