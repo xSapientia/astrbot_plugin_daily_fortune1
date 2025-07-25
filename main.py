@@ -42,6 +42,8 @@ class DailyFortunePlugin(Star):
 
         # 初始化LLM提供商
         self._init_provider()
+        # 防LLM调用标记（可通过配置控制）
+        self.prevent_llm_calls = self.config.get("disable_llm_calls", True)
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
@@ -396,6 +398,14 @@ class DailyFortunePlugin(Star):
 
     async def _generate_with_llm(self, prompt: str, system_prompt: str = "", user_nickname: str = "") -> str:
         """使用LLM生成内容"""
+        # 强制防LLM调用检查
+        if self.prevent_llm_calls:
+            logger.debug("[daily_fortune] LLM调用被插件设置阻止")
+            if "过程" in prompt:
+                return "水晶球中浮现出神秘的光芒..."
+            elif "建议" in prompt:
+                return "保持乐观的心态，好运自然来。"
+            return "LLM服务已被禁用"
         try:
             # 优先使用默认provider，如果配置的provider不可用
             provider = self.context.get_using_provider()
@@ -465,6 +475,9 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent, subcommand: str = ""):
         """今日人品查询"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         # 处理help子命令
         if subcommand.lower() == "help":
             help_text = """📖 每日人品插件指令帮助
@@ -793,10 +806,15 @@ class DailyFortunePlugin(Star):
         self._save_data(self.history_data, self.history_file)
 
         yield event.plain_result(result)
+        # 允许事件继续传播
+        event.continue_event()
 
     @filter.command("jrrprank")
     async def jrrprank(self, event: AstrMessageEvent):
         """群内今日人品排行榜"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         if event.is_private_chat():
             yield event.plain_result("排行榜功能仅在群聊中可用")
             return
@@ -846,10 +864,15 @@ class DailyFortunePlugin(Star):
         )
 
         yield event.plain_result(result)
+        # 允许事件继续传播
+        event.continue_event()
 
     @filter.command("jrrphistory", alias={"jrrphi"})
     async def jrrphistory(self, event: AstrMessageEvent):
         """查看人品历史记录"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         # 检查是否有@某人
         target_user_id = event.get_sender_id()
         target_nickname = event.get_sender_name()
@@ -903,10 +926,15 @@ class DailyFortunePlugin(Star):
         )
 
         yield event.plain_result(result)
+        # 允许事件继续传播
+        event.continue_event()
 
     @filter.command("jrrpdelete", alias={"jrrpdel"})
     async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
         """删除个人人品历史记录（保留今日）"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         # 处理 /jrrp delete --confirm 的情况，参数可能在不同位置
         if confirm != "--confirm" and target_confirm == "--confirm":
             confirm = "--confirm"
@@ -971,12 +999,16 @@ class DailyFortunePlugin(Star):
 
         action_desc = f"{target_nickname} 的" if is_target_others else "您的"
         yield event.plain_result(f"✅ 已删除 {action_desc}除今日以外的人品历史记录（共 {deleted_count} 条）")
-
+        # 允许事件继续传播
+        event.continue_event()
 
     @filter.command("jrrpinitialize", alias={"jrrpinit"})
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def jrrpinitialize(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
         """初始化今日人品记录（仅管理员）"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         # 处理 /jrrp init --confirm 的情况，参数可能在不同位置
         if confirm != "--confirm" and target_confirm == "--confirm":
             confirm = "--confirm"
@@ -1030,11 +1062,16 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(f"✅ 已初始化 {action_desc}今日人品记录，现在可以重新使用 /jrrp 随机人品值了")
         else:
             yield event.plain_result(f"ℹ️ {action_desc}今日还没有人品记录，无需初始化")
+        # 允许事件继续传播
+        event.continue_event()
 
     @filter.command("jrrpreset", alias={"jrrpre"})
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def jrrpreset(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
         """重置所有人品数据（仅管理员）"""
+        # 防止触发LLM调用
+        event.should_call_llm(False)
+        event.stop_event()
         # 处理 /jrrp reset --confirm 的情况，参数可能在不同位置
         if confirm != "--confirm" and target_confirm == "--confirm":
             confirm = "--confirm"
@@ -1073,3 +1110,5 @@ class DailyFortunePlugin(Star):
                 logger.info(f"已删除配置文件: {config_file}")
 
         logger.info("astrbot_plugin_daily_fortune1 插件已卸载")
+        # 允许事件继续传播
+        event.continue_event()
