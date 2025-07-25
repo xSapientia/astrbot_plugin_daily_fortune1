@@ -396,8 +396,8 @@ class DailyFortunePlugin(Star):
 
     async def _generate_with_llm(self, prompt: str, system_prompt: str = "", user_nickname: str = "") -> str:
         """使用LLM生成内容"""
-        # 检查是否禁用LLM（通过配置）
-        if self.config.get("disable_llm_calls", False):
+        # 检查是否启用LLM（通过配置）
+        if not self.config.get("enable_llm_calls", True):
             logger.debug("[daily_fortune] LLM调用被配置禁用")
             if "过程" in prompt:
                 return "水晶球中浮现出神秘的光芒..."
@@ -729,8 +729,8 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(result)
             return
 
-        # 首次查询，只有这里需要调用LLM
-        # 无需设置 event.should_call_llm(False)，因为我们希望允许默认的LLM行为
+        # 首次查询，阻止默认的LLM调用（我们自己控制LLM调用）
+        event.should_call_llm(False)
         
         # 显示检测中消息
         detecting_msg = self.config.get("detecting_message",

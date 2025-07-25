@@ -30,11 +30,11 @@
     "default": "🥇, 🥈, 🥉, 🏅, 🏅",
     "hint": "排行榜奖牌列表，用逗号分隔，超出配置数量的名次将使用最后一个奖牌"
   },
-  "disable_llm_calls": {
-    "description": "禁用LLM调用",
+  "enable_llm_calls": {
+    "description": "启用LLM调用",
     "type": "bool",
-    "default": false,
-    "hint": "开启后将完全禁用插件的LLM调用，使用预设文本响应。关闭后允许LLM生成个性化内容"
+    "default": true,
+    "hint": "开启后允许插件调用LLM生成个性化内容。关闭后将使用预设文本响应"
   },
   "detecting_message": {
     "description": "检测中提示文本",
