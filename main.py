@@ -135,56 +135,21 @@ class DailyFortunePlugin(Star):
         self.medals_str = medals_str
         logger.info(f"[daily_fortune] 奖牌配置已初始化，共 {len(self.medals)} 个奖牌")
 
-    def _get_provider_info(self, provider):
-        """获取provider详细信息的辅助方法"""
-        try:
-            # 尝试多种属性获取名称
-            name = (getattr(provider, 'provider_name', None) or 
-                   getattr(provider, 'name', None) or 
-                   getattr(provider, 'display_name', None) or 
-                   str(provider))
-            
-            provider_id_attr = getattr(provider, 'provider_id', str(provider))
-            provider_type = getattr(provider, 'provider_type', getattr(provider, 'type', 'Unknown'))
-            model = getattr(provider, 'model_name', getattr(provider, 'model', 'Unknown'))
-            
-            return name, provider_id_attr, provider_type, model
-        except Exception as e:
-            logger.debug(f"Error getting provider info: {e}")
-            return 'Unknown', 'Unknown', 'Unknown', 'Unknown'
-
     def _init_provider(self):
         """初始化LLM提供商"""
         provider_id = self.config.get("llm_provider_id", "")
 
         if provider_id:
+            # 使用指定的provider_id
             try:
-                # 显示所有可用的provider
-                all_providers = self.context.get_all_providers()
-                logger.debug(f"[daily_fortune] 所有可用的providers:")
-                for p in all_providers:
-                    name, pid, ptype, model = self._get_provider_info(p)
-                    logger.debug(f"Available provider: {name} (ID: {pid}, Type: {ptype}, Model: {model})")
-                
-                # 查找指定的provider
                 self.provider = self.context.get_provider_by_id(provider_id)
                 if self.provider:
-                    name, pid, ptype, model = self._get_provider_info(self.provider)
-                    logger.debug(f"Found matching provider: {name} (ID: {pid}, Type: {ptype}, Model: {model})")
+                    logger.info(f"[daily_fortune] 使用provider_id: {provider_id}")
+                    # 测试连接
                     asyncio.create_task(self._test_provider_connection())
                 else:
-                    logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}")
-                    # 尝试通过名称匹配
-                    for p in all_providers:
-                        name, _, _, _ = self._get_provider_info(p)
-                        if name == provider_id or str(p) == provider_id:
-                            self.provider = p
-                            logger.debug(f"[daily_fortune] 通过名称匹配找到: {provider_id}")
-                            break
-                    
-                    if not self.provider:
-                        logger.warning(f"[daily_fortune] 所有匹配方式都失败，将使用默认提供商")
-                        self.provider = None
+                    logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}，将使用默认提供商")
+                    self.provider = None
             except Exception as e:
                 logger.error(f"[daily_fortune] 获取provider失败: {e}")
                 self.provider = None
@@ -229,25 +194,17 @@ class DailyFortunePlugin(Star):
         """测试provider连接"""
         try:
             if self.provider:
-                name, provider_id_attr, provider_type, model = self._get_provider_info(self.provider)
-                
-                logger.debug(
-                    f"Attempting to check provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
+                response = await self.provider.text_chat(
+                    prompt="测试连接",
+                    contexts=[],
+                    system_prompt=""
                 )
-                
-                logger.debug(f"Sending 'Ping' to provider: {name}")
-                response = await asyncio.wait_for(
-                    self.provider.text_chat(prompt="REPLY `PONG` ONLY"), timeout=45.0
-                )
-                logger.debug(f"Received response from {name}: {response}")
-                
                 if response and response.completion_text:
-                    logger.info(f"[daily_fortune] Provider连接测试成功: {name}")
+                    logger.info(f"[daily_fortune] Provider连接测试成功")
                 else:
-                    logger.warning(f"[daily_fortune] Provider连接测试失败：无响应 - {name}")
+                    logger.warning(f"[daily_fortune] Provider连接测试失败：无响应")
         except Exception as e:
-            name, _, _, _ = self._get_provider_info(self.provider) if self.provider else ('Unknown', '', '', '')
-            logger.error(f"[daily_fortune] Provider连接测试失败: {name} - {e}")
+            logger.error(f"[daily_fortune] Provider连接测试失败: {e}")
 
     async def _test_third_party_api(self, api_config):
         """测试第三方API连接"""
@@ -269,7 +226,7 @@ class DailyFortunePlugin(Star):
 
             data = {
                 'model': api_config.get('model', 'gpt-3.5-turbo'),
-                'messages': [{'role': 'user', 'content': 'REPLY `PONG` ONLY'}],
+                'messages': [{'role': 'user', 'content': '测试连接'}],
                 'max_tokens': 10
             }
 
