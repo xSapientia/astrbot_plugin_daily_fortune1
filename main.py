@@ -520,19 +520,29 @@ class DailyFortunePlugin(Star):
 
         # 处理其他子命令
         if subcommand.lower() == "rank":
-            await self.jrrprank(event)
+            # 直接调用生成器函数
+            async for result in self.jrrprank(event):
+                yield result
             return
         elif subcommand.lower() in ["history", "hi"]:
-            await self.jrrphistory(event)
+            # 直接调用生成器函数
+            async for result in self.jrrphistory(event):
+                yield result
             return
         elif subcommand.lower() in ["delete", "del"]:
-            await self.jrrpdelete(event, "")
+            # 直接调用生成器函数
+            async for result in self.jrrpdelete(event, ""):
+                yield result
             return
         elif subcommand.lower() in ["init", "initialize"]:
-            await self.jrrpinitialize(event, "")
+            # 直接调用生成器函数
+            async for result in self.jrrpinitialize(event, ""):
+                yield result
             return
         elif subcommand.lower() in ["reset", "re"]:
-            await self.jrrpreset(event, "")
+            # 直接调用生成器函数
+            async for result in self.jrrpreset(event, ""):
+                yield result
             return
 
         # 检查是否有@某人
