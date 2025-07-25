@@ -5,7 +5,7 @@ import hashlib
 import numpy as np
 from datetime import datetime, date
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Tuple
 from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger, AstrBotConfig
@@ -42,8 +42,6 @@ class DailyFortunePlugin(Star):
 
         # 初始化LLM提供商
         self._init_provider()
-        # 防LLM调用标记（可通过配置控制）
-        self.prevent_llm_calls = self.config.get("disable_llm_calls", False)
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
@@ -398,14 +396,15 @@ class DailyFortunePlugin(Star):
 
     async def _generate_with_llm(self, prompt: str, system_prompt: str = "", user_nickname: str = "") -> str:
         """使用LLM生成内容"""
-        # 强制防LLM调用检查
-        if self.prevent_llm_calls:
-            logger.debug("[daily_fortune] LLM调用被插件设置阻止")
+        # 检查是否禁用LLM（通过配置）
+        if self.config.get("disable_llm_calls", False):
+            logger.debug("[daily_fortune] LLM调用被配置禁用")
             if "过程" in prompt:
                 return "水晶球中浮现出神秘的光芒..."
             elif "建议" in prompt:
                 return "保持乐观的心态，好运自然来。"
             return "LLM服务已被禁用"
+            
         try:
             # 优先使用默认provider，如果配置的provider不可用
             provider = self.context.get_using_provider()
@@ -472,62 +471,75 @@ class DailyFortunePlugin(Star):
                 return "保持乐观的心态，好运自然来。"
             return "生成失败"
 
+    def _get_target_user_from_event(self, event: AstrMessageEvent) -> Tuple[Optional[str], Optional[str]]:
+        """从消息中提取目标用户ID和昵称"""
+        for comp in event.message_obj.message:
+            if isinstance(comp, Comp.At):
+                return str(comp.qq), f"用户{comp.qq}"
+        return None, None
+
+    def _has_confirm_param(self, event: AstrMessageEvent) -> bool:
+        """检查消息中是否包含 --confirm 参数"""
+        return "--confirm" in event.message_str.lower()
+
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent, subcommand: str = ""):
         """今日人品查询"""
-        # 防止触发LLM调用
-        event.should_call_llm(False)
-        event.stop_event()
         # 处理help子命令
         if subcommand.lower() == "help":
+            # help不需要LLM
+            event.should_call_llm(False)
             help_text = """📖 每日人品插件指令帮助
 
-    🎲 基础指令：
-    • 查询自己的今日人品值
-        - jrrp
-    • 查询他人的今日人品值
-        - jrrp @某人
-    • 显示帮助信息
-        - jrrp help
+🎲 基础指令：
+• 查询自己的今日人品值
+    - jrrp
+• 查询他人的今日人品值
+    - jrrp @某人
+• 显示帮助信息
+    - jrrp help
 
-    📊 排行榜：
-    • 查看群内今日人品排行榜
-        - jrrp rank
-        - jrrprank
+📊 排行榜：
+• 查看群内今日人品排行榜
+    - jrrp rank
+    - jrrprank
 
-    📚 历史记录：
-    • 查看历史记录
-        - jrrp history
-        - jrrp hi
-        - jrrphistory
-        - jrrphi
-    • 查看他人历史记录
-        - jrrp history @某人
-        - jrrphistory @某人
+📚 历史记录：
+• 查看历史记录
+    - jrrp history
+    - jrrp hi
+    - jrrphistory
+    - jrrphi
+• 查看他人历史记录
+    - jrrp history @某人
+    - jrrphistory @某人
 
-    🗑️ 数据管理：
-    • 删除除今日外的历史记录
-        - jrrp delete --confirm
-        - jrrp del --confirm
-        - jrrpdelete --confirm
-        - jrrpdel --confirm
-    • 删除他人历史记录（需管理员权限）
-        - jrrp delete @某人 --confirm
-        - jrrpdelete @某人 --confirm
+🗑️ 数据管理：
+• 删除除今日外的历史记录
+    - jrrp delete --confirm
+    - jrrp del --confirm
+    - jrrpdelete --confirm
+    - jrrpdel --confirm
+• 删除他人历史记录（需管理员权限）
+    - jrrp delete @某人 --confirm
+    - jrrpdelete @某人 --confirm
 
-    ⚙️ 管理员指令：
-    • 初始化今日记录
-        - jrrp init --confirm
-        - jrrp initialize --confirm
-        - jrrpinit --confirm
-        - jrrpinitialize --confirm
-    • 重置所有数据
-        - jrrp reset --confirm
-        - jrrp re --confirm
-        - jrrpreset --confirm
-        - jrrpre --confirm
+⚙️ 管理员指令：
+• 初始化今日记录
+    - jrrp init --confirm
+    - jrrp initialize --confirm
+    - jrrpinit --confirm
+    - jrrpinitialize --confirm
+• 初始化他人今日记录
+    - jrrp init @某人 --confirm
+    - jrrpinit @某人 --confirm
+• 重置所有数据
+    - jrrp reset --confirm
+    - jrrp re --confirm
+    - jrrpreset --confirm
+    - jrrpre --confirm
 
-    💡 提示：带 --confirm 的指令需要确认参数才能执行"""
+💡 提示：带 --confirm 的指令需要确认参数才能执行"""
             yield event.plain_result(help_text)
             return
 
@@ -546,12 +558,7 @@ class DailyFortunePlugin(Star):
         
         elif subcommand.lower() in ["init", "initialize"]:
             # 检查是否有 --confirm 参数
-            confirm_param = ""
-            # 从原始消息中提取 --confirm
-            raw_message = event.message_str.lower()
-            if "--confirm" in raw_message:
-                confirm_param = "--confirm"
-
+            confirm_param = "--confirm" if self._has_confirm_param(event) else ""
             # 直接调用生成器函数
             async for result in self.jrrpinitialize(event, confirm_param):
                 yield result
@@ -559,40 +566,25 @@ class DailyFortunePlugin(Star):
         
         elif subcommand.lower() in ["delete", "del"]:
             # 检查是否有 --confirm 参数
-            confirm_param = ""
-            raw_message = event.message_str.lower()
-            if "--confirm" in raw_message:
-                confirm_param = "--confirm"
-
+            confirm_param = "--confirm" if self._has_confirm_param(event) else ""
             async for result in self.jrrpdelete(event, confirm_param):
                 yield result
             return
 
         elif subcommand.lower() in ["reset", "re"]:
             # 检查是否有 --confirm 参数
-            confirm_param = ""
-            raw_message = event.message_str.lower()
-            if "--confirm" in raw_message:
-                confirm_param = "--confirm"
-
+            confirm_param = "--confirm" if self._has_confirm_param(event) else ""
             async for result in self.jrrpreset(event, confirm_param):
                 yield result
             return
 
-
         # 检查是否有@某人
-        target_user_id = None
-        target_nickname = None
+        target_user_id, target_nickname = self._get_target_user_from_event(event)
 
-        # 检查消息中是否有At
-        for comp in event.message_obj.message:
-            if isinstance(comp, Comp.At):
-                target_user_id = str(comp.qq)
-                target_nickname = f"用户{target_user_id}"
-                break
-
-        # 如果是查询他人
+        # 如果是查询他人 - 不需要LLM
         if target_user_id:
+            event.should_call_llm(False)
+            
             today = self._get_today_key()
             sender_info = await self._get_user_info(event)
             sender_nickname = sender_info["nickname"]
@@ -682,7 +674,7 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(result)
             return
 
-        # 查询自己的人品（原有逻辑保持不变）
+        # 查询自己的人品
         user_info = await self._get_user_info(event)
         user_id = user_info["user_id"]
         nickname = user_info["nickname"]
@@ -694,7 +686,9 @@ class DailyFortunePlugin(Star):
 
         # 检查是否已经查询过
         if user_id in self.daily_data[today]:
-            # 已查询，返回缓存结果
+            # 已查询，返回缓存结果 - 不需要LLM
+            event.should_call_llm(False)
+            
             cached = self.daily_data[today][user_id]
             jrrp = cached["jrrp"]
             fortune, femoji = self._get_fortune_info(jrrp)
@@ -735,7 +729,10 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(result)
             return
 
-        # 首次查询，显示检测中消息
+        # 首次查询，只有这里需要调用LLM
+        # 无需设置 event.should_call_llm(False)，因为我们希望允许默认的LLM行为
+        
+        # 显示检测中消息
         detecting_msg = self.config.get("detecting_message",
             "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...")
         yield event.plain_result(detecting_msg.format(nickname=nickname))
@@ -772,7 +769,7 @@ class DailyFortunePlugin(Star):
 
         # 构建结果
         result_template = self.config.get("templates", {}).get("random",
-            "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}。")
+            "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
 
         result = result_template.format(
             process=process,
@@ -806,15 +803,13 @@ class DailyFortunePlugin(Star):
         self._save_data(self.history_data, self.history_file)
 
         yield event.plain_result(result)
-        # 允许事件继续传播
-        event.continue_event()
 
     @filter.command("jrrprank")
     async def jrrprank(self, event: AstrMessageEvent):
         """群内今日人品排行榜"""
         # 防止触发LLM调用
         event.should_call_llm(False)
-        event.stop_event()
+        
         if event.is_private_chat():
             yield event.plain_result("排行榜功能仅在群聊中可用")
             return
@@ -864,27 +859,23 @@ class DailyFortunePlugin(Star):
         )
 
         yield event.plain_result(result)
-        # 允许事件继续传播
-        event.continue_event()
 
     @filter.command("jrrphistory", alias={"jrrphi"})
     async def jrrphistory(self, event: AstrMessageEvent):
         """查看人品历史记录"""
         # 防止触发LLM调用
         event.should_call_llm(False)
-        event.stop_event()
+        
         # 检查是否有@某人
-        target_user_id = event.get_sender_id()
-        target_nickname = event.get_sender_name()
-
-        # 检查消息中是否有At
-        for comp in event.message_obj.message:
-            if isinstance(comp, Comp.At):
-                target_user_id = str(comp.qq)
-                # 尝试获取被@用户的昵称
-                target_user_info = await self._get_user_info(event, target_user_id)
-                target_nickname = target_user_info["nickname"]
-                break
+        target_user_id, target_nickname = self._get_target_user_from_event(event)
+        
+        if not target_user_id:
+            target_user_id = event.get_sender_id()
+            target_nickname = event.get_sender_name()
+        else:
+            # 获取被@用户的信息
+            target_user_info = await self._get_user_info(event, target_user_id)
+            target_nickname = target_user_info["nickname"]
 
         if target_user_id not in self.history_data:
             yield event.plain_result(f"{target_nickname} 还没有任何人品记录呢~")
@@ -926,44 +917,32 @@ class DailyFortunePlugin(Star):
         )
 
         yield event.plain_result(result)
-        # 允许事件继续传播
-        event.continue_event()
 
     @filter.command("jrrpdelete", alias={"jrrpdel"})
-    async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
+    async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = ""):
         """删除个人人品历史记录（保留今日）"""
         # 防止触发LLM调用
         event.should_call_llm(False)
-        event.stop_event()
-        # 处理 /jrrp delete --confirm 的情况，参数可能在不同位置
-        if confirm != "--confirm" and target_confirm == "--confirm":
-            confirm = "--confirm"
-
+        
         # 检查是否有@某人
-        target_user_id = event.get_sender_id()
-        target_nickname = event.get_sender_name()
-        is_target_others = False
+        target_user_id, target_nickname = self._get_target_user_from_event(event)
+        is_target_others = target_user_id is not None
 
-        # 检查消息中是否有At
-        for comp in event.message_obj.message:
-            if isinstance(comp, Comp.At):
-                target_user_id = str(comp.qq)
-                target_user_info = await self._get_user_info(event, target_user_id)
-                target_nickname = target_user_info["nickname"]
-                is_target_others = True
-                break
+        if not target_user_id:
+            target_user_id = event.get_sender_id()
+            target_nickname = event.get_sender_name()
+        else:
+            # 获取被@用户的信息
+            target_user_info = await self._get_user_info(event, target_user_id)
+            target_nickname = target_user_info["nickname"]
 
         # 如果是@他人，需要管理员权限
-        if is_target_others:
-            # 检查是否为管理员
-            sender_id = event.get_sender_id()
-            astrbot_config = self.context.get_config()
-            admins = astrbot_config.get('admins', [])
-            if sender_id not in admins:
-                yield event.plain_result("❌ 删除他人数据需要管理员权限")
-                return
+        if is_target_others and not event.is_admin():
+            yield event.plain_result("❌ 删除他人数据需要管理员权限")
+            return
 
-        if confirm != "--confirm":
+        # 检查确认参数
+        if confirm != "--confirm" and not self._has_confirm_param(event):
             action_desc = f"删除 {target_nickname} 的" if is_target_others else "删除您的"
             yield event.plain_result(f"⚠️ 警告：此操作将{action_desc}除今日以外的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
             return
@@ -999,37 +978,31 @@ class DailyFortunePlugin(Star):
 
         action_desc = f"{target_nickname} 的" if is_target_others else "您的"
         yield event.plain_result(f"✅ 已删除 {action_desc}除今日以外的人品历史记录（共 {deleted_count} 条）")
-        # 允许事件继续传播
-        event.continue_event()
 
     @filter.command("jrrpinitialize", alias={"jrrpinit"})
     @filter.permission_type(filter.PermissionType.ADMIN)
-    async def jrrpinitialize(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
+    async def jrrpinitialize(self, event: AstrMessageEvent, confirm: str = ""):
         """初始化今日人品记录（仅管理员）"""
         # 防止触发LLM调用
         event.should_call_llm(False)
-        event.stop_event()
-        # 处理 /jrrp init --confirm 的情况，参数可能在不同位置
-        if confirm != "--confirm" and target_confirm == "--confirm":
-            confirm = "--confirm"
-
+        
         # 检查是否有@某人
-        target_user_id = event.get_sender_id()
-        target_nickname = event.get_sender_name()
-        is_target_others = False
+        target_user_id, target_nickname = self._get_target_user_from_event(event)
+        is_target_others = target_user_id is not None
 
-        # 检查消息中是否有At
-        for comp in event.message_obj.message:
-            if isinstance(comp, Comp.At):
-                target_user_id = str(comp.qq)
-                target_user_info = await self._get_user_info(event, target_user_id)
-                target_nickname = target_user_info["nickname"]
-                is_target_others = True
-                break
+        if not target_user_id:
+            target_user_id = event.get_sender_id()
+            target_nickname = event.get_sender_name()
+        else:
+            # 获取被@用户的信息
+            target_user_info = await self._get_user_info(event, target_user_id)
+            target_nickname = target_user_info["nickname"]
 
-        if confirm != "--confirm":
+        # 检查确认参数
+        if confirm != "--confirm" and not self._has_confirm_param(event):
             action_desc = f"{target_nickname} 的" if is_target_others else "您的"
-            yield event.plain_result(f"⚠️ 警告：此操作将删除 {action_desc}今日人品记录，使其可以重新随机！\n如确认初始化，请使用：/jrrpinit --confirm")
+            cmd_example = f"/jrrpinit @{target_nickname} --confirm" if is_target_others else "/jrrpinit --confirm"
+            yield event.plain_result(f"⚠️ 警告：此操作将删除 {action_desc}今日人品记录，使其可以重新随机！\n如确认初始化，请使用：{cmd_example}")
             return
 
         today = self._get_today_key()
@@ -1058,21 +1031,16 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(f"✅ 已初始化 {action_desc}今日人品记录，现在可以重新使用 /jrrp 随机人品值了")
         else:
             yield event.plain_result(f"ℹ️ {action_desc}今日还没有人品记录，无需初始化")
-        # 允许事件继续传播
-        event.continue_event()
 
     @filter.command("jrrpreset", alias={"jrrpre"})
     @filter.permission_type(filter.PermissionType.ADMIN)
-    async def jrrpreset(self, event: AstrMessageEvent, confirm: str = "", target_confirm: str = ""):
+    async def jrrpreset(self, event: AstrMessageEvent, confirm: str = ""):
         """重置所有人品数据（仅管理员）"""
         # 防止触发LLM调用
         event.should_call_llm(False)
-        event.stop_event()
-        # 处理 /jrrp reset --confirm 的情况，参数可能在不同位置
-        if confirm != "--confirm" and target_confirm == "--confirm":
-            confirm = "--confirm"
-
-        if confirm != "--confirm":
+        
+        # 检查确认参数
+        if confirm != "--confirm" and not self._has_confirm_param(event):
             yield event.plain_result("⚠️ 警告：此操作将删除所有用户的人品数据！\n如确认重置，请使用：/jrrpreset --confirm")
             return
 
@@ -1103,5 +1071,3 @@ class DailyFortunePlugin(Star):
                 logger.info(f"已删除配置文件: {config_file}")
 
         logger.info("astrbot_plugin_daily_fortune1 插件已卸载")
-        # 允许事件继续传播
-        event.continue_event()
