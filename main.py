@@ -524,26 +524,48 @@ class DailyFortunePlugin(Star):
             async for result in self.jrrprank(event):
                 yield result
             return
+        
         elif subcommand.lower() in ["history", "hi"]:
             # 直接调用生成器函数
             async for result in self.jrrphistory(event):
                 yield result
             return
-        elif subcommand.lower() in ["delete", "del"]:
-            # 直接调用生成器函数
-            async for result in self.jrrpdelete(event, ""):
-                yield result
-            return
+        
         elif subcommand.lower() in ["init", "initialize"]:
+            # 检查是否有 --confirm 参数
+            confirm_param = ""
+            # 从原始消息中提取 --confirm
+            raw_message = event.message_str.lower()
+            if "--confirm" in raw_message:
+                confirm_param = "--confirm"
+
             # 直接调用生成器函数
-            async for result in self.jrrpinitialize(event, ""):
+            async for result in self.jrrpinitialize(event, confirm_param):
                 yield result
             return
+        
+        elif subcommand.lower() in ["delete", "del"]:
+            # 检查是否有 --confirm 参数
+            confirm_param = ""
+            raw_message = event.message_str.lower()
+            if "--confirm" in raw_message:
+                confirm_param = "--confirm"
+
+            async for result in self.jrrpdelete(event, confirm_param):
+                yield result
+            return
+
         elif subcommand.lower() in ["reset", "re"]:
-            # 直接调用生成器函数
-            async for result in self.jrrpreset(event, ""):
+            # 检查是否有 --confirm 参数
+            confirm_param = ""
+            raw_message = event.message_str.lower()
+            if "--confirm" in raw_message:
+                confirm_param = "--confirm"
+
+            async for result in self.jrrpreset(event, confirm_param):
                 yield result
             return
+
 
         # 检查是否有@某人
         target_user_id = None
