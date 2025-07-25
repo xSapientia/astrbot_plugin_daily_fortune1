@@ -302,24 +302,9 @@ class DailyFortunePlugin(Star):
 
     def _get_provider_display_name(self):
         """获取用户配置的provider显示名称"""
-        try:
-            # 从AstrBot的配置中获取用户设置的provider名称
-            astrbot_config = self.context.get_config()
-            providers_config = astrbot_config.get('providers', [])
-            
-            # 查找当前使用的provider配置
-            current_provider_id = astrbot_config.get('llm_provider_id', '')
-            
-            for provider_config in providers_config:
-                if provider_config.get('id') == current_provider_id:
-                    # 优先使用用户自定义的名称
-                    return provider_config.get('name', provider_config.get('id', 'Unknown'))
-            
-            # 如果没有找到，返回默认名称
-            return current_provider_id or 'Unknown'
-        except Exception as e:
-            logger.debug(f"获取provider显示名称失败: {e}")
-            return 'Unknown'
+        # 直接从插件配置中获取用户填写的provider名称
+        provider_display_name = self.config.get("llm_provider_id", "")
+        return provider_display_name if provider_display_name else "Unknown"
 
     async def _test_third_party_api(self, api_config):
         """测试第三方API连接"""
