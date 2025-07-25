@@ -135,61 +135,52 @@ class DailyFortunePlugin(Star):
         self.medals_str = medals_str
         logger.info(f"[daily_fortune] 奖牌配置已初始化，共 {len(self.medals)} 个奖牌")
 
+    def _get_provider_info(self, provider):
+        """获取provider详细信息的辅助方法"""
+        try:
+            # 尝试多种属性获取名称
+            name = (getattr(provider, 'provider_name', None) or 
+                   getattr(provider, 'name', None) or 
+                   getattr(provider, 'display_name', None) or 
+                   str(provider))
+            
+            provider_id_attr = getattr(provider, 'provider_id', str(provider))
+            provider_type = getattr(provider, 'provider_type', getattr(provider, 'type', 'Unknown'))
+            model = getattr(provider, 'model_name', getattr(provider, 'model', 'Unknown'))
+            
+            return name, provider_id_attr, provider_type, model
+        except Exception as e:
+            logger.debug(f"Error getting provider info: {e}")
+            return 'Unknown', 'Unknown', 'Unknown', 'Unknown'
+
     def _init_provider(self):
         """初始化LLM提供商"""
         provider_id = self.config.get("llm_provider_id", "")
 
         if provider_id:
-            # 使用指定的provider_id
             try:
-                # 显示所有可用的provider详细信息
+                # 显示所有可用的provider
                 all_providers = self.context.get_all_providers()
                 logger.debug(f"[daily_fortune] 所有可用的providers:")
                 for p in all_providers:
-                    try:
-                        # 获取provider的详细信息
-                        name = getattr(p, 'name', getattr(p, 'provider_name', 'Unknown'))
-                        provider_id_attr = getattr(p, 'provider_id', str(p))
-                        provider_type = getattr(p, 'type', getattr(p, 'provider_type', 'Unknown'))
-                        model = getattr(p, 'model', getattr(p, 'model_name', 'Unknown'))
-                        
-                        logger.debug(
-                            f"Available provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
-                        )
-                    except Exception as e:
-                        logger.debug(f"Error getting provider info: {e}")
+                    name, pid, ptype, model = self._get_provider_info(p)
+                    logger.debug(f"Available provider: {name} (ID: {pid}, Type: {ptype}, Model: {model})")
                 
+                # 查找指定的provider
                 self.provider = self.context.get_provider_by_id(provider_id)
                 if self.provider:
-                    # 输出找到的provider详细信息
-                    name = getattr(self.provider, 'name', getattr(self.provider, 'provider_name', 'Unknown'))
-                    provider_id_attr = getattr(self.provider, 'provider_id', str(self.provider))
-                    provider_type = getattr(self.provider, 'type', getattr(self.provider, 'provider_type', 'Unknown'))
-                    model = getattr(self.provider, 'model', getattr(self.provider, 'model_name', 'Unknown'))
-                    
-                    logger.debug(
-                        f"Found matching provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
-                    )
-                    # 测试连接
+                    name, pid, ptype, model = self._get_provider_info(self.provider)
+                    logger.debug(f"Found matching provider: {name} (ID: {pid}, Type: {ptype}, Model: {model})")
                     asyncio.create_task(self._test_provider_connection())
                 else:
                     logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}")
-                    logger.debug(f"[daily_fortune] 尝试通过名称匹配查找provider...")
-                    
-                    # 尝试通过名称或其他属性匹配
+                    # 尝试通过名称匹配
                     for p in all_providers:
-                        try:
-                            name = getattr(p, 'name', getattr(p, 'provider_name', ''))
-                            if name == provider_id:
-                                self.provider = p
-                                logger.debug(f"[daily_fortune] 通过name匹配找到: {provider_id}")
-                                break
-                            elif str(p) == provider_id:
-                                self.provider = p
-                                logger.debug(f"[daily_fortune] 通过字符串匹配找到: {provider_id}")
-                                break
-                        except Exception as e:
-                            logger.debug(f"Error matching provider: {e}")
+                        name, _, _, _ = self._get_provider_info(p)
+                        if name == provider_id or str(p) == provider_id:
+                            self.provider = p
+                            logger.debug(f"[daily_fortune] 通过名称匹配找到: {provider_id}")
+                            break
                     
                     if not self.provider:
                         logger.warning(f"[daily_fortune] 所有匹配方式都失败，将使用默认提供商")
