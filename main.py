@@ -265,50 +265,41 @@ class DailyFortunePlugin(Star):
         today = self._get_today_key()
 
         if algorithm == "random":
-            # 纯随机算法（每次真随机，不使用缓存）
-            # 使用系统时间+随机数作为种子，确保真随机
-            import time
-            current_timestamp = time.time()
-            microsecond = datetime.now().microsecond
-            seed = int((current_timestamp * 1000000 + microsecond + random.random() * 1000) % 2**32)
+            # 纯随机算法（添加时间变量实现真随机）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
+            seed = f"{user_id}_{today}_{current_time}"
             random.seed(seed)
             return random.randint(0, 100)
 
         elif algorithm == "hash":
-            # 基于用户ID和日期的哈希算法（每天固定）
+            # 基于用户ID和日期的哈希算法（保持固定）
             seed = f"{user_id}_{today}"
             hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
             return hash_value % 101
 
         elif algorithm == "normal":
-            # 正态分布算法（每次真随机）
-            import time
-            current_timestamp = time.time()
-            microsecond = datetime.now().microsecond
-            seed = int((current_timestamp * 1000000 + microsecond + random.random() * 1000) % 2**32)
-            np.random.seed(seed)
+            # 正态分布算法（中间值概率高）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             # 均值50，标准差20的正态分布
             value = int(np.random.normal(50, 20))
             # 限制在0-100范围内
             return max(0, min(100, value))
 
         elif algorithm == "lucky":
-            # 幸运算法（每次真随机，高分值概率较高）
-            import time
-            current_timestamp = time.time()
-            microsecond = datetime.now().microsecond
-            seed = int((current_timestamp * 1000000 + microsecond + random.random() * 1000) % 2**32)
-            np.random.seed(seed)
+            # 幸运算法（高分值概率较高）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             # 使用beta分布，α=8, β=2，偏向高分
             value = int(np.random.beta(8, 2) * 100)
             return value
 
         elif algorithm == "challenge":
-            # 挑战算法（每次真随机，极端值概率较高）
-            import time
-            current_timestamp = time.time()
-            microsecond = datetime.now().microsecond
-            seed = int((current_timestamp * 1000000 + microsecond + random.random() * 1000) % 2**32)
+            # 挑战算法（极端值概率较高）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
             random.seed(seed)
             # 30%概率获得极低或极高值
             if random.random() < 0.3:
@@ -321,11 +312,9 @@ class DailyFortunePlugin(Star):
                 # 普通值
                 return random.randint(21, 79)
         else:
-            # 默认使用random算法
-            import time
-            current_timestamp = time.time()
-            microsecond = datetime.now().microsecond
-            seed = int((current_timestamp * 1000000 + microsecond + random.random() * 1000) % 2**32)
+            # 纯随机算法（添加时间变量实现真随机）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
+            seed = f"{user_id}_{today}_{current_time}"
             random.seed(seed)
             return random.randint(0, 100)
 
@@ -704,14 +693,9 @@ class DailyFortunePlugin(Star):
         if today not in self.daily_data:
             self.daily_data[today] = {}
 
-        # 对于所有算法，都保存缓存，但对于非hash算法，每次都重新计算
-        algorithm = self.config.get("jrrp_algorithm", "random")
-
         # 检查是否已经查询过
-        is_cached = user_id in self.daily_data[today]
-        
-        if is_cached and algorithm == "hash":
-            # 只有hash算法才直接返回缓存结果
+        if user_id in self.daily_data[today]:
+            # 已查询，返回缓存结果 - 不需要LLM
             event.should_call_llm(False)
             
             cached = self.daily_data[today][user_id]
@@ -754,8 +738,7 @@ class DailyFortunePlugin(Star):
             yield event.plain_result(result)
             return
 
-        # 对于random、normal、lucky、challenge算法，每次都重新计算
-        # 首次查询或非hash算法，阻止默认的LLM调用（我们自己控制LLM调用）
+        # 首次查询，阻止默认的LLM调用（我们自己控制LLM调用）
         event.should_call_llm(False)
         
         # 显示检测中消息
@@ -804,7 +787,7 @@ class DailyFortunePlugin(Star):
             advice=advice
         )
 
-        # 总是缓存结果（更新或新增）
+        # 缓存结果（确保today已存在）
         if today not in self.daily_data:
             self.daily_data[today] = {}
 
