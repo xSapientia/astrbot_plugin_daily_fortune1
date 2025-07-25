@@ -142,33 +142,54 @@ class DailyFortunePlugin(Star):
         if provider_id:
             # 使用指定的provider_id
             try:
-                # 添加调试信息：显示所有可用的provider
+                # 显示所有可用的provider详细信息
                 all_providers = self.context.get_all_providers()
-                logger.info(f"[daily_fortune] 所有可用的provider: {[p.provider_id if hasattr(p, 'provider_id') else str(p) for p in all_providers]}")
+                logger.debug(f"[daily_fortune] 所有可用的providers:")
+                for p in all_providers:
+                    try:
+                        # 获取provider的详细信息
+                        name = getattr(p, 'name', getattr(p, 'provider_name', 'Unknown'))
+                        provider_id_attr = getattr(p, 'provider_id', str(p))
+                        provider_type = getattr(p, 'type', getattr(p, 'provider_type', 'Unknown'))
+                        model = getattr(p, 'model', getattr(p, 'model_name', 'Unknown'))
+                        
+                        logger.debug(
+                            f"Available provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
+                        )
+                    except Exception as e:
+                        logger.debug(f"Error getting provider info: {e}")
                 
                 self.provider = self.context.get_provider_by_id(provider_id)
                 if self.provider:
-                    logger.info(f"[daily_fortune] 成功找到并使用provider_id: {provider_id}")
+                    # 输出找到的provider详细信息
+                    name = getattr(self.provider, 'name', getattr(self.provider, 'provider_name', 'Unknown'))
+                    provider_id_attr = getattr(self.provider, 'provider_id', str(self.provider))
+                    provider_type = getattr(self.provider, 'type', getattr(self.provider, 'provider_type', 'Unknown'))
+                    model = getattr(self.provider, 'model', getattr(self.provider, 'model_name', 'Unknown'))
+                    
+                    logger.debug(
+                        f"Found matching provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
+                    )
                     # 测试连接
                     asyncio.create_task(self._test_provider_connection())
                 else:
                     logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}")
-                    logger.info(f"[daily_fortune] 尝试通过名称匹配查找provider...")
+                    logger.debug(f"[daily_fortune] 尝试通过名称匹配查找provider...")
                     
                     # 尝试通过名称或其他属性匹配
                     for p in all_providers:
-                        if hasattr(p, 'provider_name') and p.provider_name == provider_id:
-                            self.provider = p
-                            logger.info(f"[daily_fortune] 通过provider_name找到: {provider_id}")
-                            break
-                        elif hasattr(p, 'name') and p.name == provider_id:
-                            self.provider = p
-                            logger.info(f"[daily_fortune] 通过name找到: {provider_id}")
-                            break
-                        elif str(p) == provider_id:
-                            self.provider = p
-                            logger.info(f"[daily_fortune] 通过字符串匹配找到: {provider_id}")
-                            break
+                        try:
+                            name = getattr(p, 'name', getattr(p, 'provider_name', ''))
+                            if name == provider_id:
+                                self.provider = p
+                                logger.debug(f"[daily_fortune] 通过name匹配找到: {provider_id}")
+                                break
+                            elif str(p) == provider_id:
+                                self.provider = p
+                                logger.debug(f"[daily_fortune] 通过字符串匹配找到: {provider_id}")
+                                break
+                        except Exception as e:
+                            logger.debug(f"Error matching provider: {e}")
                     
                     if not self.provider:
                         logger.warning(f"[daily_fortune] 所有匹配方式都失败，将使用默认提供商")
@@ -218,7 +239,7 @@ class DailyFortunePlugin(Star):
         try:
             if self.provider:
                 response = await self.provider.text_chat(
-                    prompt="测试连接",
+                    prompt="REPLY `PONG` ONLY",
                     contexts=[],
                     system_prompt=""
                 )
