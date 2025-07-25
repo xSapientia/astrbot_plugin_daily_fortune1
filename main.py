@@ -282,7 +282,7 @@ class DailyFortunePlugin(Star):
 
             data = {
                 'model': api_config.get('model', 'gpt-3.5-turbo'),
-                'messages': [{'role': 'user', 'content': '测试连接'}],
+                'messages': [{'role': 'user', 'content': 'REPLY `PONG` ONLY'}],
                 'max_tokens': 10
             }
 
