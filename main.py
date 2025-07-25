@@ -698,7 +698,7 @@ class DailyFortunePlugin(Star):
             # 用户正在处理中，返回正在检测中的消息
             event.should_call_llm(False)
             processing_msg = self.config.get("processing_message",
-                "正在检测中，请稍候...")
+                "已经在努力获取 {nickname} 的命运了哦~")
             yield event.plain_result(processing_msg.format(nickname=nickname))
             return
 

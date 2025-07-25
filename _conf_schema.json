@@ -45,7 +45,7 @@
   "processing_message": {
     "description": "正在检测中提示文本",
     "type": "string",
-    "default": "正在检测中，请稍候...",
+    "default": "已经在努力获取 {nickname} 的命运了哦~",
     "hint": "支持变量: {nickname}。当用户在生成结果期间重复调用时显示此消息"
   },
   "show_cached_result": {
