@@ -780,13 +780,13 @@ class DailyFortunePlugin(Star):
 
             # 生成过程模拟（传入用户昵称）
             process_prompt = self.config.get("prompts", {}).get("process",
-                "使用与{user_id}对应的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
+                "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
             process_prompt = process_prompt.format(**vars_dict)
             process = await self._generate_with_llm(process_prompt, user_nickname=nickname)
 
             # 生成建议（传入用户昵称）
             advice_prompt = self.config.get("prompts", {}).get("advice",
-                "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用与{user_id}对应的简称称呼，对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内")
+                "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
             advice_prompt = advice_prompt.format(**vars_dict)
             advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
 
