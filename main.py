@@ -43,7 +43,7 @@ class DailyFortunePlugin(Star):
         # 初始化LLM提供商
         self._init_provider()
         # 防LLM调用标记（可通过配置控制）
-        self.prevent_llm_calls = self.config.get("disable_llm_calls", True)
+        self.prevent_llm_calls = self.config.get("disable_llm_calls", False)
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
@@ -261,33 +261,29 @@ class DailyFortunePlugin(Star):
         """获取今日日期作为key"""
         return date.today().strftime("%Y-%m-%d")
 
-    def _reset_random_seeds(self):
-        """重置随机种子"""
-        # 重置Python内置random模块的种子
-        random.seed()
-        # 重置numpy的随机种子
-        np.random.seed()
-        logger.info("[daily_fortune] 已重置随机种子")
-
     def _calculate_jrrp(self, user_id: str) -> int:
         """计算今日人品值"""
         algorithm = self.config.get("jrrp_algorithm", "hash")
         today = self._get_today_key()
 
         if algorithm == "hash":
-            # 基于用户ID和日期的哈希算法
+            # 基于用户ID和日期的哈希算法（保持固定）
             seed = f"{user_id}_{today}"
             hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
             return hash_value % 101
 
         elif algorithm == "random":
-            # 纯随机算法
-            random.seed(f"{user_id}_{today}")
+            # 纯随机算法（添加时间变量实现真随机）
+            current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             return random.randint(0, 100)
 
         elif algorithm == "normal":
             # 正态分布算法（中间值概率高）
-            random.seed(f"{user_id}_{today}")
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             # 均值50，标准差20的正态分布
             value = int(np.random.normal(50, 20))
             # 限制在0-100范围内
@@ -295,14 +291,18 @@ class DailyFortunePlugin(Star):
 
         elif algorithm == "lucky":
             # 幸运算法（高分值概率较高）
-            random.seed(f"{user_id}_{today}")
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             # 使用beta分布，α=8, β=2，偏向高分
             value = int(np.random.beta(8, 2) * 100)
             return value
 
         elif algorithm == "challenge":
             # 挑战算法（极端值概率较高）
-            random.seed(f"{user_id}_{today}")
+            current_time = datetime.now().strftime("%H:%M:%S.%f")
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
             # 30%概率获得极低或极高值
             if random.random() < 0.3:
                 # 极端值
@@ -1053,10 +1053,6 @@ class DailyFortunePlugin(Star):
                 del self.history_data[target_user_id]
             self._save_data(self.history_data, self.history_file)
 
-        # 重置随机种子
-        if deleted:
-            self._reset_random_seeds()
-
         action_desc = f"{target_nickname} 的" if is_target_others else "您的"
         if deleted:
             yield event.plain_result(f"✅ 已初始化 {action_desc}今日人品记录，现在可以重新使用 /jrrp 随机人品值了")
@@ -1085,9 +1081,6 @@ class DailyFortunePlugin(Star):
         self.history_data = {}
         self._save_data(self.daily_data, self.fortune_file)
         self._save_data(self.history_data, self.history_file)
-
-        # 重置随机种子
-        self._reset_random_seeds()
 
         yield event.plain_result("✅ 所有人品数据已重置")
 
