@@ -1,6 +1,6 @@
 # AstrBot 每日人品插件 (Daily Fortune)
 
-[![version](https://img.shields.io/badge/version-0.0.8-blue.svg)](https://github.com/xSapientia/astrbot_plugin_daily_fortune1)
+[![version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/xSapientia/astrbot_plugin_daily_fortune1)
 [![license](https://img.shields.io/badge/license-MIT-green.svg)](https://github.com/xSapientia/astrbot_plugin_daily_fortune1/blob/main/LICENSE)
 [![platform](https://img.shields.io/badge/AstrBot-%3E%3D3.4.0-orange.svg)](https://github.com/AstrBotDevs/AstrBot)
 
@@ -66,10 +66,6 @@
 - `jrrpdelete --confirm`
 - `jrrpdel --confirm`
 
-#### 删除他人历史记录（需管理员权限）
-- `jrrp delete @某人 --confirm`
-- `jrrpdelete @某人 --confirm`
-
 ### 管理员指令
 
 #### 初始化今日记录
@@ -109,7 +105,8 @@
 
 ### 显示与模板配置
 
--   `detecting_message`：首次查询时的"检测中"提示文本。
+-   `detecting_message`：首次查询时的"开始检测"提示文本。
+-   `processing_message`：重复调用时的"正在检测中"提示文本。
 -   `show_cached_result`：再次查询自己时，是否显示首次生成的完整结果。
 -   `show_others_cached_result`：@查询他人时，是否显示对方首次生成的完整结果。
 -   `others_not_queried_message`：@查询他人但对方未查询时的提示信息，支持所有模板变量。
@@ -131,6 +128,11 @@
 - **特殊变量**：`{target_nickname}`, `{target_user_id}`, `{sender_nickname}` (仅在特定场景)
 
 ## 🔄 更新日志
+
+-   **v0.1.0** (2025-01-26)
+    -   **【调整】** 移除 `jrrpdelete` 中@他人的功能，现在只能删除自己的数据。
+    -   **【新增】** 添加防止重复调用机制，在生成结果期间再次调用会显示"正在检测中"消息。
+    -   **【新增】** 新增 `processing_message` 配置项，支持自定义"正在检测中"提示文本。
 
 -   **v0.0.9** (2025-07-25)
     -   **【修复】** 子指令无效传参的问题。

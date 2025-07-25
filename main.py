@@ -16,7 +16,7 @@ import astrbot.api.message_components as Comp
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "每日人品值和运势查询插件，支持排行榜和历史记录",
-    "0.0.9",
+    "0.1.0",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
@@ -42,6 +42,9 @@ class DailyFortunePlugin(Star):
 
         # 初始化LLM提供商
         self._init_provider()
+
+        # 初始化正在处理的用户集合
+        self.processing_users = set()
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
@@ -521,9 +524,6 @@ class DailyFortunePlugin(Star):
     - jrrp del --confirm
     - jrrpdelete --confirm
     - jrrpdel --confirm
-• 删除他人历史记录（需管理员权限）
-    - jrrp delete @某人 --confirm
-    - jrrpdelete @某人 --confirm
 
 ⚙️ 管理员指令：
 • 初始化今日记录
@@ -693,6 +693,15 @@ class DailyFortunePlugin(Star):
         if today not in self.daily_data:
             self.daily_data[today] = {}
 
+        # 检查用户是否正在处理中
+        if user_id in self.processing_users:
+            # 用户正在处理中，返回正在检测中的消息
+            event.should_call_llm(False)
+            processing_msg = self.config.get("processing_message",
+                "正在检测中，请稍候...")
+            yield event.plain_result(processing_msg.format(nickname=nickname))
+            return
+
         # 检查是否已经查询过
         if user_id in self.daily_data[today]:
             # 已查询，返回缓存结果 - 不需要LLM
@@ -741,77 +750,85 @@ class DailyFortunePlugin(Star):
         # 首次查询，阻止默认的LLM调用（我们自己控制LLM调用）
         event.should_call_llm(False)
         
-        # 显示检测中消息
-        detecting_msg = self.config.get("detecting_message",
-            "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...")
-        yield event.plain_result(detecting_msg.format(nickname=nickname))
+        # 将用户添加到正在处理的集合中
+        self.processing_users.add(user_id)
+        
+        try:
+            # 显示检测中消息
+            detecting_msg = self.config.get("detecting_message",
+                "神秘的能量汇聚，{nickname}，你的命运即将显现，正在祈祷中...")
+            yield event.plain_result(detecting_msg.format(nickname=nickname))
 
-        # 计算人品值
-        jrrp = self._calculate_jrrp(user_id)
-        fortune, femoji = self._get_fortune_info(jrrp)
+            # 计算人品值
+            jrrp = self._calculate_jrrp(user_id)
+            fortune, femoji = self._get_fortune_info(jrrp)
 
-        # 准备LLM生成的变量
-        vars_dict = {
-            "nickname": nickname,
-            "card": user_info["card"],
-            "title": user_info["title"],
-            "jrrp": jrrp,
-            "fortune": fortune,
-            "femoji": femoji,
-            "medals": self.medals_str,
-            "jrrp_ranges": self.jrrp_ranges_str,
-            "fortune_names": self.fortune_names_str,
-            "fortune_emojis": self.fortune_emojis_str
-        }
+            # 准备LLM生成的变量
+            vars_dict = {
+                "nickname": nickname,
+                "card": user_info["card"],
+                "title": user_info["title"],
+                "jrrp": jrrp,
+                "fortune": fortune,
+                "femoji": femoji,
+                "medals": self.medals_str,
+                "jrrp_ranges": self.jrrp_ranges_str,
+                "fortune_names": self.fortune_names_str,
+                "fortune_emojis": self.fortune_emojis_str
+            }
 
-        # 生成过程模拟（传入用户昵称）
-        process_prompt = self.config.get("prompts", {}).get("process",
-            "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
-        process_prompt = process_prompt.format(**vars_dict)
-        process = await self._generate_with_llm(process_prompt, user_nickname=nickname)
+            # 生成过程模拟（传入用户昵称）
+            process_prompt = self.config.get("prompts", {}).get("process",
+                "使用user_id的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
+            process_prompt = process_prompt.format(**vars_dict)
+            process = await self._generate_with_llm(process_prompt, user_nickname=nickname)
 
-        # 生成建议（传入用户昵称）
-        advice_prompt = self.config.get("prompts", {}).get("advice",
-            "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
-        advice_prompt = advice_prompt.format(**vars_dict)
-        advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
+            # 生成建议（传入用户昵称）
+            advice_prompt = self.config.get("prompts", {}).get("advice",
+                "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用user_id的简称称呼，对user_id的今日人品值{jrrp}给出你的评语和建议，50字以内")
+            advice_prompt = advice_prompt.format(**vars_dict)
+            advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
 
-        # 构建结果
-        result_template = self.config.get("templates", {}).get("random",
-            "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
+            # 构建结果
+            result_template = self.config.get("templates", {}).get("random",
+                "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
 
-        result = result_template.format(
-            process=process,
-            jrrp=jrrp,
-            fortune=fortune,
-            advice=advice
-        )
+            result = result_template.format(
+                process=process,
+                jrrp=jrrp,
+                fortune=fortune,
+                advice=advice
+            )
 
-        # 缓存结果（确保today已存在）
-        if today not in self.daily_data:
-            self.daily_data[today] = {}
+            # 缓存结果（确保today已存在）
+            if today not in self.daily_data:
+                self.daily_data[today] = {}
 
-        self.daily_data[today][user_id] = {
-            "jrrp": jrrp,
-            "fortune": fortune,
-            "process": process,
-            "advice": advice,
-            "result": result,
-            "nickname": nickname,
-            "timestamp": datetime.now().isoformat()
-        }
-        self._save_data(self.daily_data, self.fortune_file)
+            self.daily_data[today][user_id] = {
+                "jrrp": jrrp,
+                "fortune": fortune,
+                "process": process,
+                "advice": advice,
+                "result": result,
+                "nickname": nickname,
+                "timestamp": datetime.now().isoformat()
+            }
+            self._save_data(self.daily_data, self.fortune_file)
 
-        # 更新历史记录
-        if user_id not in self.history_data:
-            self.history_data[user_id] = {}
-        self.history_data[user_id][today] = {
-            "jrrp": jrrp,
-            "fortune": fortune
-        }
-        self._save_data(self.history_data, self.history_file)
+            # 更新历史记录
+            if user_id not in self.history_data:
+                self.history_data[user_id] = {}
+            self.history_data[user_id][today] = {
+                "jrrp": jrrp,
+                "fortune": fortune
+            }
+            self._save_data(self.history_data, self.history_file)
 
-        yield event.plain_result(result)
+            yield event.plain_result(result)
+            
+        finally:
+            # 确保在处理完成后从集合中移除用户
+            self.processing_users.discard(user_id)
 
     @filter.command("jrrprank")
     async def jrrprank(self, event: AstrMessageEvent):
@@ -933,27 +950,13 @@ class DailyFortunePlugin(Star):
         # 防止触发LLM调用
         event.should_call_llm(False)
         
-        # 检查是否有@某人
-        target_user_id, target_nickname = self._get_target_user_from_event(event)
-        is_target_others = target_user_id is not None
-
-        if not target_user_id:
-            target_user_id = event.get_sender_id()
-            target_nickname = event.get_sender_name()
-        else:
-            # 获取被@用户的信息
-            target_user_info = await self._get_user_info(event, target_user_id)
-            target_nickname = target_user_info["nickname"]
-
-        # 如果是@他人，需要管理员权限
-        if is_target_others and not event.is_admin():
-            yield event.plain_result("❌ 删除他人数据需要管理员权限")
-            return
+        # 只能删除自己的数据
+        target_user_id = event.get_sender_id()
+        target_nickname = event.get_sender_name()
 
         # 检查确认参数
         if confirm != "--confirm" and not self._has_confirm_param(event):
-            action_desc = f"删除 {target_nickname} 的" if is_target_others else "删除您的"
-            yield event.plain_result(f"⚠️ 警告：此操作将{action_desc}除今日以外的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
+            yield event.plain_result(f"⚠️ 警告：此操作将删除您的除今日以外的所有人品历史记录！\n如确认删除，请使用：/jrrpdelete --confirm")
             return
 
         today = self._get_today_key()
@@ -985,8 +988,7 @@ class DailyFortunePlugin(Star):
 
         self._save_data(self.daily_data, self.fortune_file)
 
-        action_desc = f"{target_nickname} 的" if is_target_others else "您的"
-        yield event.plain_result(f"✅ 已删除 {action_desc}除今日以外的人品历史记录（共 {deleted_count} 条）")
+        yield event.plain_result(f"✅ 已删除您的除今日以外的人品历史记录（共 {deleted_count} 条）")
 
     @filter.command("jrrpinitialize", alias={"jrrpinit"})
     @filter.permission_type(filter.PermissionType.ADMIN)
@@ -1035,6 +1037,9 @@ class DailyFortunePlugin(Star):
                 del self.history_data[target_user_id]
             self._save_data(self.history_data, self.history_file)
 
+        # 从正在处理的集合中移除（如果存在）
+        self.processing_users.discard(target_user_id)
+
         action_desc = f"{target_nickname} 的" if is_target_others else "您的"
         if deleted:
             yield event.plain_result(f"✅ 已初始化 {action_desc}今日人品记录，现在可以重新使用 /jrrp 随机人品值了")
@@ -1058,6 +1063,9 @@ class DailyFortunePlugin(Star):
         self.history_data = {}
         self._save_data(self.daily_data, self.fortune_file)
         self._save_data(self.history_data, self.history_file)
+
+        # 清空正在处理的用户集合
+        self.processing_users.clear()
 
         yield event.plain_result("✅ 所有人品数据已重置")
 
