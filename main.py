@@ -261,21 +261,21 @@ class DailyFortunePlugin(Star):
 
     def _calculate_jrrp(self, user_id: str) -> int:
         """计算今日人品值"""
-        algorithm = self.config.get("jrrp_algorithm", "hash")
+        algorithm = self.config.get("jrrp_algorithm", "random")
         today = self._get_today_key()
 
-        if algorithm == "hash":
-            # 基于用户ID和日期的哈希算法（保持固定）
-            seed = f"{user_id}_{today}"
-            hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
-            return hash_value % 101
-
-        elif algorithm == "random":
+        if algorithm == "random":
             # 纯随机算法（添加时间变量实现真随机）
             current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
             seed = f"{user_id}_{today}_{current_time}"
             random.seed(seed)
             return random.randint(0, 100)
+
+        elif algorithm == "hash":
+            # 基于用户ID和日期的哈希算法（保持固定）
+            seed = f"{user_id}_{today}"
+            hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
+            return hash_value % 101
 
         elif algorithm == "normal":
             # 正态分布算法（中间值概率高）
@@ -312,10 +312,11 @@ class DailyFortunePlugin(Star):
                 # 普通值
                 return random.randint(21, 79)
         else:
-            # 默认使用hash算法
-            seed = f"{user_id}_{today}"
-            hash_value = int(hashlib.md5(seed.encode()).hexdigest(), 16)
-            return hash_value % 101
+            # 默认使用random算法
+            current_time = datetime.now().strftime("%H:%M:%S.%f")  # 包含微秒的时间
+            seed = f"{user_id}_{today}_{current_time}"
+            random.seed(seed)
+            return random.randint(0, 100)
 
     def _get_fortune_info(self, jrrp: int) -> tuple:
         """根据人品值获取运势信息"""
@@ -557,6 +558,10 @@ class DailyFortunePlugin(Star):
             return
         
         elif subcommand.lower() in ["init", "initialize"]:
+            # 初始化指令需要管理员权限
+            if not event.is_admin():
+                yield event.plain_result("❌ 此操作需要管理员权限")
+                return
             # 检查是否有 --confirm 参数
             confirm_param = "--confirm" if self._has_confirm_param(event) else ""
             # 直接调用生成器函数
@@ -572,6 +577,10 @@ class DailyFortunePlugin(Star):
             return
 
         elif subcommand.lower() in ["reset", "re"]:
+            # 重置指令需要管理员权限
+            if not event.is_admin():
+                yield event.plain_result("❌ 此操作需要管理员权限")
+                return
             # 检查是否有 --confirm 参数
             confirm_param = "--confirm" if self._has_confirm_param(event) else ""
             async for result in self.jrrpreset(event, confirm_param):
