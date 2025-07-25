@@ -1,5 +1,5 @@
 name: astrbot_plugin_daily_fortune1
-version: 0.0.7
+version: 0.0.9
 author: xSapientia
 description: 每日人品值和运势查询插件，支持排行榜和历史记录
 repository: https://github.com/xSapientia/astrbot_plugin_daily_fortune1
@@ -8,5 +8,3 @@ tags:
   - 运势
   - 每日
   - 人品
-requirements:
-  - astrbot>=3.4.0

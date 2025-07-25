@@ -16,7 +16,7 @@ import astrbot.api.message_components as Comp
     "astrbot_plugin_daily_fortune1",
     "xSapientia",
     "每日人品值和运势查询插件，支持排行榜和历史记录",
-    "0.0.8",
+    "0.0.9",
     "https://github.com/xSapientia/astrbot_plugin_daily_fortune1"
 )
 class DailyFortunePlugin(Star):
