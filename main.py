@@ -138,13 +138,32 @@ class DailyFortunePlugin(Star):
     def _get_provider_info(self, provider):
         """获取provider详细信息的辅助方法"""
         try:
-            # 尝试多种属性获取名称
-            name = (getattr(provider, 'provider_name', None) or 
-                   getattr(provider, 'name', None) or 
-                   getattr(provider, 'display_name', None) or 
-                   str(provider))
+            # 尝试多种属性获取名称，优先使用友好名称
+            name = None
             
-            provider_id_attr = getattr(provider, 'provider_id', str(provider))
+            # 先尝试获取用户自定义的名称
+            if hasattr(provider, 'nickname') and provider.nickname:
+                name = provider.nickname
+            elif hasattr(provider, 'display_name') and provider.display_name:
+                name = provider.display_name
+            elif hasattr(provider, 'provider_name') and provider.provider_name:
+                name = provider.provider_name
+            elif hasattr(provider, 'name') and provider.name:
+                name = provider.name
+            
+            # 如果都没有，尝试从类名推断
+            if not name:
+                class_name = provider.__class__.__name__
+                if 'OpenAI' in class_name:
+                    name = 'OpenAI'
+                elif 'Claude' in class_name:
+                    name = 'Claude'
+                elif 'Gemini' in class_name:
+                    name = 'Gemini'
+                else:
+                    name = class_name.replace('Provider', '').replace('Official', '')
+            
+            provider_id_attr = getattr(provider, 'provider_id', getattr(provider, 'id', str(provider)))
             provider_type = getattr(provider, 'provider_type', getattr(provider, 'type', 'Unknown'))
             model = getattr(provider, 'model_name', getattr(provider, 'model', 'Unknown'))
             
