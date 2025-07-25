@@ -809,12 +809,14 @@ class DailyFortunePlugin(Star):
 
             # 准备LLM生成的变量
             vars_dict = {
+                "user_id": user_id,
                 "nickname": nickname,
                 "card": user_info["card"],
                 "title": user_info["title"],
                 "jrrp": jrrp,
                 "fortune": fortune,
                 "femoji": femoji,
+                "date": today,
                 "medals": self.medals_str,
                 "jrrp_ranges": self.jrrp_ranges_str,
                 "fortune_names": self.fortune_names_str,
