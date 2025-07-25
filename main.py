@@ -229,11 +229,7 @@ class DailyFortunePlugin(Star):
         """测试provider连接"""
         try:
             if self.provider:
-                # 获取provider详细信息
-                name = getattr(self.provider, 'name', getattr(self.provider, 'provider_name', 'Unknown'))
-                provider_id_attr = getattr(self.provider, 'provider_id', str(self.provider))
-                provider_type = getattr(self.provider, 'type', getattr(self.provider, 'provider_type', 'Unknown'))
-                model = getattr(self.provider, 'model', getattr(self.provider, 'model_name', 'Unknown'))
+                name, provider_id_attr, provider_type, model = self._get_provider_info(self.provider)
                 
                 logger.debug(
                     f"Attempting to check provider: {name} (ID: {provider_id_attr}, Type: {provider_type}, Model: {model})"
@@ -250,7 +246,7 @@ class DailyFortunePlugin(Star):
                 else:
                     logger.warning(f"[daily_fortune] Provider连接测试失败：无响应 - {name}")
         except Exception as e:
-            name = getattr(self.provider, 'name', getattr(self.provider, 'provider_name', 'Unknown')) if self.provider else 'Unknown'
+            name, _, _, _ = self._get_provider_info(self.provider) if self.provider else ('Unknown', '', '', '')
             logger.error(f"[daily_fortune] Provider连接测试失败: {name} - {e}")
 
     async def _test_third_party_api(self, api_config):
