@@ -142,14 +142,37 @@ class DailyFortunePlugin(Star):
         if provider_id:
             # 使用指定的provider_id
             try:
+                # 添加调试信息：显示所有可用的provider
+                all_providers = self.context.get_all_providers()
+                logger.info(f"[daily_fortune] 所有可用的provider: {[p.provider_id if hasattr(p, 'provider_id') else str(p) for p in all_providers]}")
+                
                 self.provider = self.context.get_provider_by_id(provider_id)
                 if self.provider:
-                    logger.info(f"[daily_fortune] 使用provider_id: {provider_id}")
+                    logger.info(f"[daily_fortune] 成功找到并使用provider_id: {provider_id}")
                     # 测试连接
                     asyncio.create_task(self._test_provider_connection())
                 else:
-                    logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}，将使用默认提供商")
-                    self.provider = None
+                    logger.warning(f"[daily_fortune] 未找到provider_id: {provider_id}")
+                    logger.info(f"[daily_fortune] 尝试通过名称匹配查找provider...")
+                    
+                    # 尝试通过名称或其他属性匹配
+                    for p in all_providers:
+                        if hasattr(p, 'provider_name') and p.provider_name == provider_id:
+                            self.provider = p
+                            logger.info(f"[daily_fortune] 通过provider_name找到: {provider_id}")
+                            break
+                        elif hasattr(p, 'name') and p.name == provider_id:
+                            self.provider = p
+                            logger.info(f"[daily_fortune] 通过name找到: {provider_id}")
+                            break
+                        elif str(p) == provider_id:
+                            self.provider = p
+                            logger.info(f"[daily_fortune] 通过字符串匹配找到: {provider_id}")
+                            break
+                    
+                    if not self.provider:
+                        logger.warning(f"[daily_fortune] 所有匹配方式都失败，将使用默认提供商")
+                        self.provider = None
             except Exception as e:
                 logger.error(f"[daily_fortune] 获取provider失败: {e}")
                 self.provider = None
