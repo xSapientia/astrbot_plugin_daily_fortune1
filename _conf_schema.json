@@ -113,13 +113,13 @@
       "process": {
         "description": "过程模拟提示词",
         "type": "text",
-        "default": "使用与{user_id}对应的简称称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
+        "default": "使用与{nickname}称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
         "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
       },
       "advice": {
         "description": "评语建议提示词",
         "type": "text",
-        "default": "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n使用与{user_id}对应的简称称呼，对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内",
+        "default": "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内",
         "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
       }
     }
