@@ -48,6 +48,33 @@ class DailyFortunePlugin(Star):
 
         logger.info("astrbot_plugin_daily_fortune1 插件已加载")
 
+    def _check_group_whitelist(self, event: AstrMessageEvent) -> bool:
+        """检查群聊白名单"""
+        whitelist_config = self.config.get("group_whitelist", {})
+        
+        # 如果没有启用白名单，直接通过
+        if not whitelist_config.get("enable", False):
+            return True
+        
+        # 私聊永远通过
+        if event.is_private_chat():
+            return True
+        
+        # 获取白名单群号列表
+        white_groups = whitelist_config.get("groups", [])
+        
+        # 如果白名单为空，则白名单功能无效，直接通过
+        if not white_groups:
+            return True
+        
+        # 获取当前群号
+        current_group = event.get_group_id()
+        if not current_group:
+            return True
+        
+        # 检查当前群号是否在白名单中
+        return str(current_group) in [str(group) for group in white_groups]
+
     def _parse_ranges_string(self, ranges_str: str) -> List[List[int]]:
         """解析人品值分段字符串"""
         try:
@@ -77,21 +104,21 @@ class DailyFortunePlugin(Star):
     def _init_fortune_levels(self):
         """初始化运势等级映射"""
         # 获取配置的人品值分段字符串
-        jrrp_ranges_str = self.config.get("jrrp_ranges", "0-1, 2-10, 11-20, 21-30, 31-40, 41-60, 61-80, 81-98, 99-100")
+        jrrp_ranges_str = self.config.get("ranges_jrrp", "0-1, 2-10, 11-20, 21-30, 31-40, 41-60, 61-80, 81-98, 99-100")
         jrrp_ranges_config = self._parse_ranges_string(jrrp_ranges_str)
 
         # 获取配置的运势描述字符串
-        fortune_names_str = self.config.get("fortune_names", "极凶, 大凶, 凶, 小凶, 末吉, 小吉, 中吉, 大吉, 极吉")
+        fortune_names_str = self.config.get("ranges_fortune", "极凶, 大凶, 凶, 小凶, 末吉, 小吉, 中吉, 大吉, 极吉")
         fortune_names_config = self._parse_list_string(fortune_names_str)
 
         # 获取配置的emoji字符串
-        fortune_emojis_str = self.config.get("fortune_emojis", "💀, 😨, 😰, 😟, 😐, 🙂, 😊, 😄, 🤩")
+        fortune_emojis_str = self.config.get("ranges_emoji", "💀, 😨, 😰, 😟, 😐, 🙂, 😊, 😄, 🤩")
         fortune_emojis_config = self._parse_list_string(fortune_emojis_str)
 
         # 保存配置字符串供模板使用
-        self.jrrp_ranges_str = jrrp_ranges_str
-        self.fortune_names_str = fortune_names_str
-        self.fortune_emojis_str = fortune_emojis_str
+        self.ranges_jrrp_str = jrrp_ranges_str
+        self.ranges_fortune_str = fortune_names_str
+        self.ranges_emoji_str = fortune_emojis_str
 
         # 构建运势等级映射
         self.fortune_levels = {}
@@ -245,8 +272,8 @@ class DailyFortunePlugin(Star):
         else:
             # 使用第三方接口配置
             api_config = self.config.get("llm_api", {})
-            if api_config.get("api_key") and api_config.get("url"):
-                logger.info(f"[daily_fortune] 配置了第三方接口: {api_config['url']}")
+            if api_config.get("llm_api_key") and api_config.get("llm_url"):
+                logger.info(f"[daily_fortune] 配置了第三方接口: {api_config['llm_url']}")
                 # 创建自定义provider
                 asyncio.create_task(self._test_third_party_api(api_config))
                 self.provider = None
@@ -312,7 +339,7 @@ class DailyFortunePlugin(Star):
             import aiohttp
 
             # 智能处理URL
-            url = api_config['url'].rstrip('/')
+            url = api_config['llm_url'].rstrip('/')
             if not url.endswith('/chat/completions'):
                 if url.endswith('/v1'):
                     url += '/chat/completions'
@@ -320,7 +347,7 @@ class DailyFortunePlugin(Star):
                     url += '/v1/chat/completions'
 
             headers = {
-                'Authorization': f"Bearer {api_config['api_key']}",
+                'Authorization': f"Bearer {api_config['llm_api_key']}",
                 'Content-Type': 'application/json'
             }
 
@@ -333,7 +360,7 @@ class DailyFortunePlugin(Star):
             async with aiohttp.ClientSession() as session:
                 async with session.post(url, headers=headers, json=data, timeout=10) as resp:
                     if resp.status == 200:
-                        logger.info(f"[daily_fortune] 第三方API连接测试成功: {api_config['url']}")
+                        logger.info(f"[daily_fortune] 第三方API连接测试成功: {api_config['llm_url']}")
                     else:
                         text = await resp.text()
                         logger.warning(f"[daily_fortune] 第三方API连接测试失败: {resp.status} - {text}")
@@ -589,6 +616,11 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrp")
     async def jrrp(self, event: AstrMessageEvent, subcommand: str = ""):
         """今日人品查询"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 处理help子命令
         if subcommand.lower() == "help":
             # help不需要LLM
@@ -729,9 +761,9 @@ class DailyFortunePlugin(Star):
                     "ranks": "",
                     "medal": "",
                     "medals": self.medals_str,
-                    "jrrp_ranges": self.jrrp_ranges_str,
-                    "fortune_names": self.fortune_names_str,
-                    "fortune_emojis": self.fortune_emojis_str
+                    "ranges_jrrp": self.ranges_jrrp_str,
+                    "ranges_fortune": self.ranges_fortune_str,
+                    "ranges_emoji": self.ranges_emoji_str
                 }
 
                 result = not_queried_template.format(**vars_dict)
@@ -745,7 +777,7 @@ class DailyFortunePlugin(Star):
             target_nickname = cached.get("nickname", target_nickname)
 
             # 构建查询模板，支持所有变量
-            query_template = self.config.get("templates", {}).get("query",
+            query_template = self.config.get("templates", {}).get("query_template",
                 "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
 
             # 准备变量字典
@@ -769,9 +801,9 @@ class DailyFortunePlugin(Star):
                 "ranks": "",
                 "medal": "",
                 "medals": self.medals_str,
-                "jrrp_ranges": self.jrrp_ranges_str,
-                "fortune_names": self.fortune_names_str,
-                "fortune_emojis": self.fortune_emojis_str
+                "ranges_jrrp": self.ranges_jrrp_str,
+                "ranges_fortune": self.ranges_fortune_str,
+                "ranges_emoji": self.ranges_emoji_str
             }
 
             result = query_template.format(**vars_dict)
@@ -813,7 +845,7 @@ class DailyFortunePlugin(Star):
             fortune, femoji = self._get_fortune_info(jrrp)
 
             # 构建查询模板
-            query_template = self.config.get("templates", {}).get("query",
+            query_template = self.config.get("templates", {}).get("query_template",
                 "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}")
 
             # 准备变量字典
@@ -834,9 +866,9 @@ class DailyFortunePlugin(Star):
                 "ranks": "",
                 "medal": "",
                 "medals": self.medals_str,
-                "jrrp_ranges": self.jrrp_ranges_str,
-                "fortune_names": self.fortune_names_str,
-                "fortune_emojis": self.fortune_emojis_str
+                "ranges_jrrp": self.ranges_jrrp_str,
+                "ranges_fortune": self.ranges_fortune_str,
+                "ranges_emoji": self.ranges_emoji_str
             }
 
             result = query_template.format(**vars_dict)
@@ -875,25 +907,25 @@ class DailyFortunePlugin(Star):
                 "femoji": femoji,
                 "date": today,
                 "medals": self.medals_str,
-                "jrrp_ranges": self.jrrp_ranges_str,
-                "fortune_names": self.fortune_names_str,
-                "fortune_emojis": self.fortune_emojis_str
+                "ranges_jrrp": self.ranges_jrrp_str,
+                "ranges_fortune": self.ranges_fortune_str,
+                "ranges_emoji": self.ranges_emoji_str
             }
 
             # 生成过程模拟（传入用户昵称）
-            process_prompt = self.config.get("prompts", {}).get("process",
-                "使用与{nickname}称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内")
+            process_prompt = self.config.get("prompts", {}).get("process_prompt",
+                "读取'user_id:{user_id}'相关信息，以对其适当的称呼开头，模拟你使用水晶球缓慢复现的过程，50字以内")
             process_prompt = process_prompt.format(**vars_dict)
             process = await self._generate_with_llm(process_prompt, user_nickname=nickname)
 
             # 生成建议（传入用户昵称）
-            advice_prompt = self.config.get("prompts", {}).get("advice",
-                "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内")
+            advice_prompt = self.config.get("prompts", {}).get("advice_prompt",
+                "人品值分段为{ranges_jrrp}，对应运势是{ranges_fortune}\n上述作为人品值好坏的参考，接下来，\n对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内")
             advice_prompt = advice_prompt.format(**vars_dict)
             advice = await self._generate_with_llm(advice_prompt, user_nickname=nickname)
 
             # 构建结果
-            result_template = self.config.get("templates", {}).get("random",
+            result_template = self.config.get("templates", {}).get("resault_template",
                 "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}")
 
             result = result_template.format(
@@ -936,6 +968,11 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrprank")
     async def jrrprank(self, event: AstrMessageEvent):
         """群内今日人品排行榜"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 防止触发LLM调用
         event.should_call_llm(False)
         
@@ -963,7 +1000,7 @@ class DailyFortunePlugin(Star):
         group_data.sort(key=lambda x: x["jrrp"], reverse=True)
 
         # 构建排行榜
-        rank_template = self.config.get("templates", {}).get("rank",
+        rank_template = self.config.get("templates", {}).get("rank_template",
             "{medal} {nickname}: {jrrp} ({fortune})")
 
         ranks = []
@@ -979,7 +1016,7 @@ class DailyFortunePlugin(Star):
             ranks.append(rank_line)
 
         # 构建完整排行榜
-        board_template = self.config.get("templates", {}).get("board",
+        board_template = self.config.get("templates", {}).get("rank_board_template",
             "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}")
 
         result = board_template.format(
@@ -992,6 +1029,11 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrphistory", alias={"jrrphi"})
     async def jrrphistory(self, event: AstrMessageEvent):
         """查看人品历史记录"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 防止触发LLM调用
         event.should_call_llm(False)
         
@@ -1034,7 +1076,7 @@ class DailyFortunePlugin(Star):
             history_lines.append(f"{date}: {data['jrrp']} ({data['fortune']})")
 
         # 使用模板
-        history_template = self.config.get("templates", {}).get("history",
+        history_template = self.config.get("templates", {}).get("history_template",
             "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}")
 
         result = history_template.format(
@@ -1050,6 +1092,11 @@ class DailyFortunePlugin(Star):
     @filter.command("jrrpdelete", alias={"jrrpdel"})
     async def jrrpdelete(self, event: AstrMessageEvent, confirm: str = ""):
         """删除个人人品历史记录（保留今日）"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 防止触发LLM调用
         event.should_call_llm(False)
         
@@ -1097,6 +1144,11 @@ class DailyFortunePlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def jrrpinitialize(self, event: AstrMessageEvent, confirm: str = ""):
         """初始化今日人品记录（仅管理员）"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 防止触发LLM调用
         event.should_call_llm(False)
         
@@ -1153,6 +1205,11 @@ class DailyFortunePlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     async def jrrpreset(self, event: AstrMessageEvent, confirm: str = ""):
         """重置所有人品数据（仅管理员）"""
+        # 检查群聊白名单
+        if not self._check_group_whitelist(event):
+            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            return
+
         # 防止触发LLM调用
         event.should_call_llm(False)
         
@@ -1185,7 +1242,7 @@ class DailyFortunePlugin(Star):
 
         if self.config.get("delete_config_on_uninstall", False):
             import os
-            config_file = f"data/config/{self.metadata.name}_config.json"
+            config_file = f"data/config/astrbot_plugin_daily_fortune1_config.json"
             if os.path.exists(config_file):
                 os.remove(config_file)
                 logger.info(f"已删除配置文件: {config_file}")

@@ -1,4 +1,22 @@
 {
+  "group_whitelist": {
+    "description": "群聊白名单配置",
+    "type": "object",
+    "items": {
+      "enable": {
+        "description": "启用群聊白名单",
+        "type": "bool",
+        "default": false,
+        "hint": "开启后只有白名单中的群聊才能使用本插件功能"
+      },
+      "groups": {
+        "description": "白名单群号列表",
+        "type": "list",
+        "default": [],
+        "hint": "群号列表，为空时白名单功能无效。示例：[\"123456789\", \"987654321\"]"
+      }
+    }
+  },
   "jrrp_algorithm": {
     "description": "人品值随机算法",
     "type": "string",
@@ -6,19 +24,19 @@
     "options": ["random", "hash", "normal", "lucky", "challenge"],
     "hint": "random: 纯随机; hash: 基于用户ID和日期的哈希算法; normal: 正态分布(中间值概率高); lucky: 幸运算法(高分概率高); challenge: 挑战算法(极端值概率高)"
   },
-  "jrrp_ranges": {
+  "ranges_jrrp": {
     "description": "人品值分段配置",
     "type": "string",
     "default": "0-1, 2-10, 11-20, 21-30, 31-40, 41-60, 61-80, 81-98, 99-100",
     "hint": "人品值分段，格式为 '最小值-最大值, 最小值-最大值, ...'，从左到右匹配"
   },
-  "fortune_names": {
+  "ranges_fortune": {
     "description": "运势名称配置",
     "type": "string",
     "default": "极凶, 大凶, 凶, 小凶, 末吉, 小吉, 中吉, 大吉, 极吉",
     "hint": "运势名称列表，用逗号分隔，必须与人品值分段数量对应，多余的会被舍去"
   },
-  "fortune_emojis": {
+  "ranges_emoji": {
     "description": "运势表情配置",
     "type": "string",
     "default": "💀, 😨, 😰, 😟, 😐, 🙂, 😊, 😄, 🤩",
@@ -64,7 +82,7 @@
     "description": "@查询他人但对方未查询时的提示信息",
     "type": "string",
     "default": "{target_nickname} 今天还没有查询过人品值呢~",
-    "hint": "支持变量: {target_nickname}, {target_user_id}, {sender_nickname}, {nickname}, {card}, {title}, {date}, {jrrp}, {fortune}, {femoji}, {process}, {advice}, {avgjrrp}, {maxjrrp}, {minjrrp}, {ranks}, {medal}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
+    "hint": "支持变量: {target_nickname}, {target_user_id}, {sender_nickname}, {nickname}, {card}, {title}, {date}, {jrrp}, {fortune}, {femoji}, {process}, {advice}, {avgjrrp}, {maxjrrp}, {minjrrp}, {ranks}, {medal}, {medals}, {ranges_jrrp}, {ranges_fortune}, {ranges_emoji}"
   },
   "history_days": {
     "description": "个人历史记录计算与缓存天数",
@@ -82,12 +100,12 @@
     "description": "第三方LLM接口配置",
     "type": "object",
     "items": {
-      "api_key": {
+      "llm_api_key": {
         "description": "API密钥",
         "type": "string",
         "default": ""
       },
-      "url": {
+      "llm_url": {
         "description": "API地址",
         "type": "string",
         "default": "",
@@ -110,17 +128,17 @@
     "description": "LLM提示词配置",
     "type": "object",
     "items": {
-      "process": {
+      "process_prompt": {
         "description": "过程模拟提示词",
         "type": "text",
-        "default": "使用与{nickname}称呼，模拟你使用水晶球缓慢复现今日结果的过程，50字以内",
-        "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
+        "default": "读取'user_id:{user_id}'相关信息，以对其适当的称呼开头，模拟你使用水晶球缓慢复现的过程，50字以内",
+        "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {ranges_jrrp}, {ranges_fortune}, {ranges_emoji}"
       },
-      "advice": {
+      "advice_prompt": {
         "description": "评语建议提示词",
         "type": "text",
-        "default": "人品值分段为{jrrp_ranges}，对应运势是{fortune_names}\n上述作为人品值好坏的参考，接下来，\n对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内",
-        "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {jrrp_ranges}, {fortune_names}, {fortune_emojis}"
+        "default": "人品值分段为{ranges_jrrp}，对应运势是{ranges_fortune}\n上述作为人品值好坏的参考，接下来，\n对{user_id}的今日人品值{jrrp}给出你的评语和建议，50字以内",
+        "hint": "支持变量: {user_id}, {nickname}, {card}, {title}, {jrrp}, {fortune}, {femoji}, {date}, {medals}, {ranges_jrrp}, {ranges_fortune}, {ranges_emoji}"
       }
     }
   },
@@ -128,31 +146,31 @@
     "description": "显示模板配置",
     "type": "object",
     "items": {
-      "random": {
+      "resault_template": {
         "description": "首次查询结果模板",
         "type": "text",
         "default": "🔮 {process}\n💎 人品值：{jrrp}\n✨ 运势：{fortune}\n💬 建议：{advice}",
         "hint": "支持变量: {process}, {jrrp}, {fortune}, {advice}"
       },
-      "query": {
+      "query_template": {
         "description": "再次查询结果模板",
         "type": "text",
         "default": "📌 今日人品\n{nickname}，今天已经查询过了哦~\n今日人品值: {jrrp}\n运势: {fortune} {femoji}",
         "hint": "支持变量: {nickname}, {jrrp}, {fortune}, {femoji}"
       },
-      "rank": {
+      "rank_template": {
         "description": "排行榜条目模板",
         "type": "string",
         "default": "{medal} {nickname}: {jrrp} ({fortune})",
         "hint": "支持变量: {medal}, {nickname}, {jrrp}, {fortune}"
       },
-      "board": {
+      "rank_board_template": {
         "description": "排行榜整体模板",
         "type": "text",
         "default": "📊【今日人品排行榜】{date}\n━━━━━━━━━━━━━━━\n{ranks}",
         "hint": "支持变量: {date}, {ranks}"
       },
-      "history": {
+      "history_template": {
         "description": "历史记录模板",
         "type": "text",
         "default": "📚 {nickname} 的人品历史记录\n{history}\n\n📊 统计信息:\n平均人品值: {avgjrrp}\n最高人品值: {maxjrrp}\n最低人品值: {minjrrp}",
