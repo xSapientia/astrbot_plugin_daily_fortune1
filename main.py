@@ -618,7 +618,7 @@ class DailyFortunePlugin(Star):
         """今日人品查询"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 处理help子命令
