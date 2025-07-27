@@ -970,7 +970,7 @@ class DailyFortunePlugin(Star):
         """群内今日人品排行榜"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 防止触发LLM调用
@@ -1031,7 +1031,7 @@ class DailyFortunePlugin(Star):
         """查看人品历史记录"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 防止触发LLM调用
@@ -1094,7 +1094,7 @@ class DailyFortunePlugin(Star):
         """删除个人人品历史记录（保留今日）"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 防止触发LLM调用
@@ -1146,7 +1146,7 @@ class DailyFortunePlugin(Star):
         """初始化今日人品记录（仅管理员）"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 防止触发LLM调用
@@ -1207,7 +1207,7 @@ class DailyFortunePlugin(Star):
         """重置所有人品数据（仅管理员）"""
         # 检查群聊白名单
         if not self._check_group_whitelist(event):
-            yield event.plain_result("❌ 当前群聊未在白名单中，无法使用本插件功能")
+            yield event.plain_result("")
             return
 
         # 防止触发LLM调用
